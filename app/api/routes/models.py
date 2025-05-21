@@ -93,7 +93,7 @@ async def delete_model(
     model_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> Any:
+):
     """
     Delete an AI model.
     
@@ -107,4 +107,3 @@ async def delete_model(
         raise HTTPException(status_code=404, detail="AI model not found")
     
     await delete_ai_model(db, model_id=model_id)
-    return None
