@@ -90,7 +90,7 @@ async def delete_conversation_by_id(
     conversation_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> Any:
+) -> None:
     """
     Delete a conversation.
     """
@@ -101,7 +101,6 @@ async def delete_conversation_by_id(
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     await delete_conversation(db, conversation_id=conversation_id)
-    return None
 
 
 @router.get("/{conversation_id}/messages", response_model=List[ChatMessage])
