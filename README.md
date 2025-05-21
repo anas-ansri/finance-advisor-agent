@@ -34,46 +34,46 @@ A FastAPI backend for AI agent-related APIs, designed with industry best practic
 
 1. Clone the repository:
 
-\`\`\`bash
-git clone https://github.com/yourusername/ai-agent-api.git
-cd ai-agent-api
-\`\`\`
+```bash
+git clone https://github.com/anas-ansri/finance-advisor-agent
+cd finance-advisor-agent
+```
 
 2. Create a virtual environment and install dependencies:
 
-\`\`\`bash
+```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
-\`\`\`
+```
 
 3. Create a `.env` file with your configuration:
 
-\`\`\`
+```
 DATABASE_URL=sqlite+aiosqlite:///./app.db
 SECRET_KEY=your-secret-key
 OPENAI_API_KEY=your-openai-api-key
-\`\`\`
+```
 
 4. Run database migrations:
 
-\`\`\`bash
+```bash
 alembic upgrade head
-\`\`\`
+```
 
 5. Start the server:
 
-\`\`\`bash
+```bash
 uvicorn main:app --reload
-\`\`\`
+```
 
 ### Using Docker
 
 1. Build and start the containers:
 
-\`\`\`bash
+```bash
 docker-compose up -d
-\`\`\`
+```
 
 2. The API will be available at http://localhost:8000
 
@@ -86,7 +86,7 @@ Once the server is running, you can access the API documentation at:
 
 ## Project Structure
 
-\`\`\`
+```
 ai-agent-api/
 ├── alembic/                  # Database migrations
 ├── app/
@@ -106,15 +106,15 @@ ai-agent-api/
 ├── requirements.txt          # Dependencies
 ├── Dockerfile                # Docker configuration
 └── docker-compose.yml        # Docker Compose configuration
-\`\`\`
+```
 
 ## Testing
 
 Run tests with pytest:
 
-\`\`\`bash
+```bash
 pytest
-\`\`\`
+```
 
 ## License
 
