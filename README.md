@@ -87,7 +87,7 @@ Once the server is running, you can access the API documentation at:
 ## Project Structure
 
 ```
-ai-agent-api/
+finance-advisor-agent/
 ├── alembic/                  # Database migrations
 ├── app/
 │   ├── api/                  # API endpoints
