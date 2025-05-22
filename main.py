@@ -23,10 +23,10 @@ async def lifespan(app: FastAPI):
     This handles startup and shutdown events.
     """
     # Startup events
-    logger.info("Starting up AI Agent API service")
+    logger.info("Starting up Savvy APIs service")
     yield
     # Shutdown events
-    logger.info("Shutting down AI Agent API service")
+    logger.info("Shutting down Savvy APIs service")
 
 
 app = FastAPI(

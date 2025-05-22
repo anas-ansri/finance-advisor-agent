@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     """
     # API settings
     API_PREFIX: str = "/api/v1"
-    PROJECT_NAME: str = "AI Agent API"
+    PROJECT_NAME: str = "Savvy APIs"
     PROJECT_DESCRIPTION: str = "Backend API for AI agent functionality"
     VERSION: str = "0.1.0"
     DEBUG: bool = False

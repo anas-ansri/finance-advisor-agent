@@ -1,4 +1,4 @@
-# AI Agent API
+# Savvy APIs
 
 A FastAPI backend for AI agent-related APIs, designed with industry best practices for code quality, maintainability, and scalability.
 
