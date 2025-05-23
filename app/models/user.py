@@ -21,3 +21,4 @@ class User(Base):
     # Relationships
     conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
     ai_preferences = relationship("AIPreference", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    statements = relationship("BankStatement", back_populates="user")
