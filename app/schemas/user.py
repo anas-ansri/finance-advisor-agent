@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Optional
+from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -10,7 +11,7 @@ class UserBase(BaseModel):
     """
     email: Optional[EmailStr] = None
     is_active: Optional[bool] = True
-    is_superuser: Optional[bool] = False
+    is_superuser: bool = False
 
 
 class UserCreate(UserBase):
@@ -18,26 +19,26 @@ class UserCreate(UserBase):
     User creation schema.
     """
     email: EmailStr
-    password: str = Field(..., min_length=8)
+    password: str
 
 
 class UserUpdate(UserBase):
     """
     User update schema.
     """
-    password: Optional[str] = Field(None, min_length=8)
+    password: Optional[str] = None
 
 
 class UserInDBBase(UserBase):
     """
     Base schema for users in database.
     """
-    id: int
+    id: UUID
     created_at: datetime
     updated_at: datetime
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class User(UserInDBBase):

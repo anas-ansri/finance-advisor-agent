@@ -3,7 +3,6 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import get_password_hash, verify_password
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
 
@@ -30,7 +29,6 @@ async def create_user(db: AsyncSession, user_in: UserCreate) -> User:
     """
     db_user = User(
         email=user_in.email,
-        hashed_password=get_password_hash(user_in.password),
         is_active=user_in.is_active,
         is_superuser=user_in.is_superuser,
     )
@@ -49,10 +47,6 @@ async def update_user(db: AsyncSession, user_id: int, user_in: UserUpdate) -> Op
         return None
     
     update_data = user_in.dict(exclude_unset=True)
-    if update_data.get("password"):
-        hashed_password = get_password_hash(update_data["password"])
-        del update_data["password"]
-        update_data["hashed_password"] = hashed_password
     
     for field, value in update_data.items():
         setattr(user, field, value)

@@ -38,9 +38,9 @@ class Settings(BaseSettings):
             return v
         raise ValueError(v)
     
-    # Security settings
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "supersecretkey")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+    # Supabase settings
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
+    SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "")
     
     # Database settings
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./app.db")
@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     class Config:
         case_sensitive = True
         env_file = ".env"
+        extra = "allow"  # Allow extra fields during transition
 
 
 settings = Settings()

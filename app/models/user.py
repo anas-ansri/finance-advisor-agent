@@ -15,7 +15,8 @@ from app.models.transaction import Transaction
 
 class User(Base):
     """
-    User model for authentication and authorization.
+    User model for storing user data.
+    Authentication is handled by Supabase.
     """
     __tablename__ = "users"
     
@@ -53,7 +54,11 @@ class User(Base):
     financial_goals = relationship("FinancialGoal", back_populates="user", cascade="all, delete-orphan")
     tags = relationship("Tag", back_populates="user", cascade="all, delete-orphan")
     transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
+    ai_preferences = relationship("AIPreference", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    statements = relationship("BankStatement", back_populates="user", cascade="all, delete-orphan")
 
 
 # Import at the bottom to avoid circular imports
 from app.models.conversation import Conversation
+from app.models.ai_preference import AIPreference
+from app.models.bank_statement import BankStatement
