@@ -20,7 +20,7 @@ class AIConversation(Base):
     title = Column(String)
     
     # Relationships
-    user = relationship("User", back_populates="conversations")
+    user = relationship("User", back_populates="ai_conversations")
     messages = relationship("AIMessage", back_populates="conversation", cascade="all, delete-orphan")
 
 

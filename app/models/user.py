@@ -45,10 +45,15 @@ class User(Base):
     currency = Column(String)
     
     # Relationships
-    conversations = relationship("AIConversation", back_populates="user", cascade="all, delete-orphan")
+    ai_conversations = relationship("AIConversation", back_populates="user", cascade="all, delete-orphan")
+    conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
     insights = relationship("AIInsight", back_populates="user", cascade="all, delete-orphan")
     accounts = relationship("Account", back_populates="user", cascade="all, delete-orphan")
     expenses = relationship("Expense", back_populates="user", cascade="all, delete-orphan")
     financial_goals = relationship("FinancialGoal", back_populates="user", cascade="all, delete-orphan")
     tags = relationship("Tag", back_populates="user", cascade="all, delete-orphan")
     transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
+
+
+# Import at the bottom to avoid circular imports
+from app.models.conversation import Conversation

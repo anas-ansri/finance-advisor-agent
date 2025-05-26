@@ -21,4 +21,9 @@ class Category(Base):
     
     # Relationships
     expenses = relationship("Expense", back_populates="category")
-    transactions = relationship("Transaction", back_populates="category") 
+    transactions = relationship("Transaction", back_populates="category")
+
+
+# Import at the bottom to avoid circular imports
+from app.models.expense import Expense
+from app.models.transaction import Transaction 
