@@ -1,2 +1,9 @@
-.venv
+venv
 .env
+venv2
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.db
+.venv

@@ -13,9 +13,23 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.core.config import settings
 from app.db.database import Base
-from app.models.ai_model import AIModel
-from app.models.ai_preference import AIPreference
-from app.models.conversation import Conversation, Message
+from app.models.account import Account
+from app.models.ai_conversation import AIConversation
+from app.models.ai_insight import AIInsight
+from app.models.ai_message import AIMessage
+from app.models.bank_statement import (
+    BankStatement,
+    BankStatementMetadata,
+    BankCategory,
+    BankTag,
+    BankTransaction,
+    BankTransactionTag,
+)
+from app.models.category import Category
+from app.models.expense import Expense
+from app.models.financial_goal import FinancialGoal
+from app.models.tag import Tag
+from app.models.transaction import Transaction, TransactionTag
 from app.models.user import User
 
 # this is the Alembic Config object, which provides
