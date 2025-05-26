@@ -41,13 +41,13 @@ async def extract_bank_statement(
         
         # Extract data from the PDF
         extractor = BankStatementExtractor()
-        metadata, transactions = extractor.extract_data(temp_file_path)
+        statement_metadata, transactions = extractor.extract_data(temp_file_path)
         
         # Save to database
         db_statement = extractor.save_to_database(
             db=db,
             user_id=current_user.id,
-            metadata=metadata,
+            statement_metadata=statement_metadata,
             transactions=transactions,
             title=title,
             description=description
