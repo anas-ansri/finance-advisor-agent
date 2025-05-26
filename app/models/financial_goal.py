@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, String, Numeric, func
+from sqlalchemy import Column, DateTime, String, Numeric, func, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
@@ -13,7 +13,7 @@ class FinancialGoal(Base):
     __tablename__ = "financial_goals"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     name = Column(String, nullable=False)
     target = Column(Numeric, nullable=False)
     current = Column(Numeric, server_default="0", nullable=False)

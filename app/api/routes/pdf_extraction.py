@@ -10,12 +10,13 @@ from sqlalchemy.orm import Session
 from app.core.security import get_current_user
 from app.db.database import get_db
 from app.models.user import User
+from app.models.bank_statement import BankStatement
 from app.services.pdf_extraction import BankStatementExtractor
-from app.schemas.bank_statement import BankStatement, BankStatementWithData, Tag, TransactionCategoryEnum
+from app.schemas.bank_statement import BankStatement as BankStatementSchema, BankStatementWithData, Tag, TransactionCategoryEnum
 
 router = APIRouter()
 
-@router.post("/extract-bank-statement/", response_model=BankStatement)
+@router.post("/extract-bank-statement/", response_model=BankStatementSchema)
 async def extract_bank_statement(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -70,7 +71,7 @@ def get_transaction_categories():
     return list(TransactionCategoryEnum)
 
 
-@router.get("/bank-statements/", response_model=List[BankStatement])
+@router.get("/bank-statements/", response_model=List[BankStatementSchema])
 def get_user_bank_statements(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -88,7 +89,7 @@ def get_user_bank_statements(
 
 @router.get("/bank-statements/{statement_id}", response_model=BankStatementWithData)
 def get_bank_statement_with_data(
-    statement_id: int,
+    statement_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -104,9 +105,10 @@ def get_bank_statement_with_data(
     
     return statement
 
-@router.delete("/bank-statements/{statement_id}", response_model=BankStatement)
+
+@router.delete("/bank-statements/{statement_id}", response_model=BankStatementSchema)
 def delete_bank_statement(
-    statement_id: int,
+    statement_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

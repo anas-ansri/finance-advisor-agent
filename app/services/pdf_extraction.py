@@ -12,7 +12,13 @@ from langchain_community.document_loaders import PyPDFLoader
 from sqlalchemy.orm import Session
 
 from app.schemas.bank_statement import BankStatementWithData, StatementMetadata, BankTransaction, TransactionCategoryEnum
-from app.models.bank_statement import BankStatement, Transaction, StatementMetadata as StatementMetadataModel, Category, TransactionCategoryEnum as DBTransactionCategoryEnum
+from app.models.bank_statement import (
+    BankStatement,
+    BankTransaction as BankTransactionModel,
+    BankStatementMetadata,
+    BankCategory,
+    TransactionCategoryEnum as DBTransactionCategoryEnum
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +33,7 @@ class BankStatementExtractor:
             raise ValueError("OpenAI API key must be provided or set as environment variable")
         
         # Initialize LLM
-        self.llm = ChatOpenAI(model_name="gpt-4o", temperature=0)
+        self.llm = ChatOpenAI(model_name="gpt-4", temperature=0)
         
         # Create text splitter for chunking
         self.text_splitter = TokenTextSplitter(
@@ -138,7 +144,7 @@ class BankStatementExtractor:
         
         return list(unique_transactions.values())
     
-    def _get_or_create_category(self, db: Session, category_name: str) -> Category:
+    def _get_or_create_category(self, db: Session, category_name: str) -> BankCategory:
         """Get or create a category by name."""
         try:
             # Try to convert the string to enum
@@ -146,21 +152,21 @@ class BankStatementExtractor:
             db_enum = DBTransactionCategoryEnum[category_enum.name]
             
             # Look up the category
-            category = db.query(Category).filter(Category.name == db_enum).first()
+            category = db.query(BankCategory).filter(BankCategory.name == db_enum).first()
             
             if not category:
                 # Create the category if it doesn't exist
-                category = Category(name=db_enum)
+                category = BankCategory(name=db_enum)
                 db.add(category)
                 db.flush()
             
             return category
         except (ValueError, KeyError):
             # If the category doesn't match our enum, use OTHER
-            category = db.query(Category).filter(Category.name == DBTransactionCategoryEnum.OTHER).first()
+            category = db.query(BankCategory).filter(BankCategory.name == DBTransactionCategoryEnum.OTHER).first()
             
             if not category:
-                category = Category(name=DBTransactionCategoryEnum.OTHER)
+                category = BankCategory(name=DBTransactionCategoryEnum.OTHER)
                 db.add(category)
                 db.flush()
             
@@ -168,11 +174,11 @@ class BankStatementExtractor:
     
     def save_to_database(self, 
                      db: Session, 
-                     user_id: int, 
+                     user_id: str, 
                      metadata: StatementMetadata,
                      transactions: List[BankTransaction],
                      title: str, 
-                        description: Optional[str] = None) -> BankStatement:
+                     description: Optional[str] = None) -> BankStatement:
         """Save extracted data to database."""
         # Create bank statement record
         db_statement = BankStatement(
@@ -186,7 +192,7 @@ class BankStatementExtractor:
         db.flush()  # Flush to get the ID
         
         # Create metadata record
-        db_metadata = StatementMetadataModel(
+        db_metadata = BankStatementMetadata(
             statement_id=db_statement.id,
             account_number=metadata.account_number,
             account_holder=metadata.account_holder,
@@ -204,7 +210,7 @@ class BankStatementExtractor:
             if transaction.category:
                 category = self._get_or_create_category(db, transaction.category)
             
-            db_transaction = Transaction(
+            db_transaction = BankTransactionModel(
                 statement_id=db_statement.id,
                 date=transaction.date,
                 description=transaction.description,

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, String, func
+from sqlalchemy import Column, DateTime, String, func, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 import uuid
@@ -13,7 +13,7 @@ class AIMessage(Base):
     __tablename__ = "ai_messages"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    conversation_id = Column(UUID(as_uuid=True), nullable=False)
+    conversation_id = Column(UUID(as_uuid=True), ForeignKey("ai_conversations.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     content = Column(String, nullable=False)
     sender = Column(String, nullable=False)

@@ -4,6 +4,13 @@ from sqlalchemy.orm import relationship
 import uuid
 
 from app.db.database import Base
+from app.models.ai_conversation import AIConversation
+from app.models.ai_insight import AIInsight
+from app.models.account import Account
+from app.models.expense import Expense
+from app.models.financial_goal import FinancialGoal
+from app.models.tag import Tag
+from app.models.transaction import Transaction
 
 
 class User(Base):
