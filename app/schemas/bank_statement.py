@@ -3,6 +3,7 @@ from typing import List, Optional
 from datetime import datetime
 from enum import Enum
 from pydantic import BaseModel, Field
+from uuid import UUID
 
 from app.schemas.user import User, UserInDBBase
 
@@ -23,6 +24,11 @@ class TransactionCategoryEnum(str, Enum):
     INCOME = "Income"
     INVESTMENTS = "Investments"
     SAVINGS = "Savings"
+    FEES_CHARGES = "Fees & Charges"
+    ATM_CASH = "ATM & Cash"
+    TRANSFERS = "Transfers"
+    INSURANCE = "Insurance"
+    TAXES = "Taxes"
     OTHER = "Other"
 
 
@@ -118,7 +124,7 @@ class BankStatementBase(BaseModel):
 class BankStatementCreate(BankStatementBase):
     """Schema for creating a bank statement."""
     
-    user_id: int = Field(..., description="ID of the user who owns this statement")
+    user_id: UUID = Field(..., description="ID of the user who owns this statement")  
 
 
 class BankStatementUpdate(BankStatementBase):
@@ -132,8 +138,8 @@ class BankStatementUpdate(BankStatementBase):
 class BankStatementInDBBase(BankStatementBase):
     """Base schema for bank statements in database."""
     
-    id: int
-    user_id: int
+    id: UUID
+    user_id: UUID
     created_at: datetime
     updated_at: datetime
     
