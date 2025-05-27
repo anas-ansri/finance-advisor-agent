@@ -51,7 +51,7 @@ async def login(
             ))
             
         # Convert SQLAlchemy model to Pydantic model
-        user_schema = UserSchema.from_orm(user)
+        user_schema = UserSchema.model_validate(user)
             
         return {
             "access_token": response.session.access_token,
