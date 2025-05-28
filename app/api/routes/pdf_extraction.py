@@ -12,16 +12,62 @@ from sqlalchemy.orm import selectinload
 from app.core.security import get_current_user
 from app.db.database import get_db
 from app.models.user import User
-from app.models.bank_statement import BankStatement
+from app.models.bank_statement import BankStatement, BankTransaction as BankTransactionModel
 from app.services.pdf_extraction import BankStatementExtractor
-from app.schemas.bank_statement import BankStatement as BankStatementSchema, BankStatementWithData, Tag, TransactionCategoryEnum
+from app.schemas.bank_statement import (
+    BankStatement as BankStatementSchema,
+    BankStatementWithData,
+    BankTransaction as BankTransactionSchema,
+    StatementMetadata,
+    Tag,
+    TransactionCategoryEnum
+)
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# app/api/routes/pdf_extraction.py (Updated extract_bank_statement function)
+def convert_to_schema(db_statement: BankStatement) -> BankStatementWithData:
+    """Convert database model to Pydantic schema."""
+    # Convert transactions
+    transactions = []
+    for t in db_statement.transactions:
+        transaction = BankTransactionSchema(
+            date=t.date,
+            description=t.description,
+            amount=t.amount,
+            balance=t.balance,
+            transaction_type=t.transaction_type,
+            category=t.category.name.value if t.category else None,
+            reference_number=t.reference_number,
+            is_recurring=t.is_recurring,
+            evidence=t.evidence
+        )
+        transactions.append(transaction)
+    
+    # Convert metadata
+    metadata = StatementMetadata(
+        account_number=db_statement.statement_metadata.account_number,
+        account_holder=db_statement.statement_metadata.account_holder,
+        bank_name=db_statement.statement_metadata.bank_name,
+        statement_period=db_statement.statement_metadata.statement_period,
+        opening_balance=db_statement.statement_metadata.opening_balance,
+        closing_balance=db_statement.statement_metadata.closing_balance
+    )
+    
+    # Create final schema
+    return BankStatementWithData(
+        id=db_statement.id,
+        user_id=db_statement.user_id,
+        title=db_statement.title,
+        description=db_statement.description,
+        is_active=db_statement.is_active,
+        created_at=db_statement.created_at,
+        updated_at=db_statement.updated_at,
+        metadata=metadata,
+        transactions=transactions
+    )
 
 @router.post("/extract-bank-statement/", response_model=BankStatementWithData)
 async def extract_bank_statement(
@@ -82,7 +128,7 @@ async def extract_bank_statement(
         stmt = select(BankStatement).where(
             BankStatement.id == db_statement.id
         ).options(
-            selectinload(BankStatement.transactions),
+            selectinload(BankStatement.transactions).selectinload(BankTransactionModel.category),
             selectinload(BankStatement.statement_metadata)
         )
 
@@ -90,7 +136,7 @@ async def extract_bank_statement(
         complete_statement = result.scalar_one()
 
         print(f"Successfully processed statement: {complete_statement.title}")
-        return complete_statement
+        return convert_to_schema(complete_statement)
 
     except Exception as e:
         logger.error(f"Error processing PDF: {str(e)}", exc_info=True)
@@ -111,7 +157,7 @@ async def get_statement_analysis(
         BankStatement.user_id == current_user.id,
         BankStatement.is_active == True
     ).options(
-        selectinload(BankStatement.transactions),
+        selectinload(BankStatement.transactions).selectinload(BankTransactionModel.category),
         selectinload(BankStatement.statement_metadata)
     )
 
@@ -184,7 +230,7 @@ async def get_bank_statement_with_data(
         BankStatement.user_id == current_user.id,
         BankStatement.is_active == True
     ).options(
-        selectinload(BankStatement.transactions),
+        selectinload(BankStatement.transactions).selectinload(BankTransactionModel.category),
         selectinload(BankStatement.statement_metadata)
     )
     
@@ -194,7 +240,7 @@ async def get_bank_statement_with_data(
     if not statement:
         raise HTTPException(status_code=404, detail="Bank statement not found")
     
-    return statement
+    return convert_to_schema(statement)
 
 @router.delete("/bank-statements/{statement_id}", response_model=BankStatementSchema)
 async def delete_bank_statement(
