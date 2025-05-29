@@ -45,7 +45,6 @@ class User(Base):
     currency = Column(String)
     
     # Relationships
-    ai_conversations = relationship("AIConversation", back_populates="user", cascade="all, delete-orphan")
     conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
     insights = relationship("AIInsight", back_populates="user", cascade="all, delete-orphan")
     accounts = relationship("Account", back_populates="user", cascade="all, delete-orphan")

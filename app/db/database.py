@@ -3,6 +3,7 @@ from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy import text
 
 from app.core.config import settings
 
@@ -22,6 +23,15 @@ async_session_factory = sessionmaker(
 
 # Create declarative base for models
 Base = declarative_base()
+
+
+async def init_db():
+    """
+    Initialize database with required extensions.
+    """
+    async with engine.begin() as conn:
+        # Enable UUID extension
+        await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
