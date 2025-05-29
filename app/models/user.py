@@ -4,7 +4,6 @@ from sqlalchemy.orm import relationship
 import uuid
 
 from app.db.database import Base
-from app.models.ai_conversation import AIConversation
 from app.models.ai_insight import AIInsight
 from app.models.account import Account
 from app.models.expense import Expense

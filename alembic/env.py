@@ -14,9 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from app.core.config import settings
 from app.db.database import Base
 from app.models.account import Account
-from app.models.ai_conversation import AIConversation
 from app.models.ai_insight import AIInsight
-from app.models.ai_message import AIMessage
 from app.models.bank_statement import (
     BankStatement,
     BankStatementMetadata,
