@@ -7,7 +7,7 @@ from supabase import create_client, Client
 from gotrue.errors import AuthApiError
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from app.db.database import get_db, Base, engine
+from app.db.database import get_test_db, Base, test_engine, init_test_db
 from app.models.user import User
 from app.models.conversation import Conversation
 from app.schemas.message import ChatMessage, ChatRequest
@@ -17,18 +17,19 @@ from app.services.ai import generate_ai_response
 from app.services.conversation import create_conversation
 from app.services.message import create_message
 from app.services.user import create_user
+from app.core.config import settings
 
 # Load environment variables
 load_dotenv()
 
-# Initialize Supabase client
+# Initialize Supabase client for testing
 supabase: Client = create_client(
-    os.getenv("SUPABASE_URL", ""),
-    os.getenv("SUPABASE_KEY", "")
+    settings.SUPABASE_TEST_URL,
+    settings.SUPABASE_TEST_KEY
 )
 
-# Create async session factory
-async_session = async_sessionmaker(engine, expire_on_commit=False)
+# Create async session factory for test database
+async_session = async_sessionmaker(test_engine, expire_on_commit=False)
 
 async def setup_test_user(db: AsyncSession) -> User:
     """Create a test user with API key"""
@@ -50,7 +51,7 @@ async def setup_test_user(db: AsyncSession) -> User:
         # Get the user ID from Supabase
         user_id = auth_response.user.id
         
-        # Create the user in our database
+        # Create the user in our test database
         user_create = UserCreate(
             email=email,
             first_name="Test",
@@ -102,6 +103,9 @@ async def process_query(db: AsyncSession, user: User, conversation: Conversation
 
 async def test_conversation():
     """Test the conversation system with various queries"""
+    # Initialize test database
+    await init_test_db()
+    
     async with async_session() as db:
         try:
             # Create test user
