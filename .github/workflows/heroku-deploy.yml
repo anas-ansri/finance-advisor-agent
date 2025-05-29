@@ -29,16 +29,19 @@ jobs:
         run: |
           curl https://cli-assets.heroku.com/install-ubuntu.sh | sh
 
+      - name: Login to Heroku
+        run: |
+          heroku login --api-key ${{ secrets.HEROKU_API_KEY }}
+
+      - name: Create Heroku Remote
+        run: |
+          heroku git:remote -a ${{ secrets.HEROKU_APP_NAME }}
+
+      - name: Clean Git Repository
+        run: |
+          git clean -fdx
+          git reset --hard
+
       - name: Deploy to Heroku
-        uses: akhileshns/heroku-deploy@v3.12.12
-        with:
-          heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
-          heroku_app_name: ${{ secrets.HEROKU_APP_NAME }}
-          heroku_email: ${{ secrets.HEROKU_EMAIL }}
-          appdir: "."
-          procfile: "web: uvicorn main:app --host=0.0.0.0 --port=${PORT:-5000}"
-          dontuseforce: 0
-          usedocker: false
-          healthcheck: "https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com/health"
-          checkstring: "healthy"
-          delay: 20 
+        run: |
+          git push heroku HEAD:main --force 
