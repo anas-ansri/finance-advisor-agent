@@ -31,7 +31,11 @@ jobs:
 
       - name: Login to Heroku
         run: |
-          heroku login --api-key ${{ secrets.HEROKU_API_KEY }}
+          echo "machine api.heroku.com
+          login ${{ secrets.HEROKU_EMAIL }}
+          password ${{ secrets.HEROKU_API_KEY }}
+          " > ~/.netrc
+          chmod 600 ~/.netrc
 
       - name: Create Heroku Remote
         run: |
