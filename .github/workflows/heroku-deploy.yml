@@ -36,4 +36,9 @@ jobs:
           heroku_app_name: ${{ secrets.HEROKU_APP_NAME }}
           heroku_email: ${{ secrets.HEROKU_EMAIL }}
           appdir: "."
-          procfile: "web: uvicorn main:app --host=0.0.0.0 --port=${PORT:-5000}" 
+          procfile: "web: uvicorn main:app --host=0.0.0.0 --port=${PORT:-5000}"
+          dontuseforce: 0
+          usedocker: false
+          healthcheck: "https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com/health"
+          checkstring: "healthy"
+          delay: 20 
