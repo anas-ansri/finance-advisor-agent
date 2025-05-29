@@ -3,7 +3,7 @@ from typing import Optional
 from uuid import UUID
 from decimal import Decimal
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 
 class UserBase(BaseModel):
@@ -38,6 +38,18 @@ class UserUpdate(UserBase):
     User update schema.
     """
     pass
+
+
+class UserSettingsUpdate(BaseModel):
+    """
+    User settings update schema.
+    """
+    openai_api_key: Optional[str] = None
+    anthropic_api_key: Optional[str] = None
+    ollama_host: Optional[str] = None
+    ollama_model: Optional[str] = None
+    preferred_ai_advisor: Optional[str] = None
+    preferred_categorization_model: Optional[str] = None
 
 
 class UserInDBBase(UserBase):
