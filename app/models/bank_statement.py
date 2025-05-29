@@ -9,8 +9,10 @@ import uuid
 from app.db.database import Base
 
 
+# app/models/bank_statement.py (Updated TransactionCategoryEnum)
+
 class TransactionCategoryEnum(enum.Enum):
-    """Enumeration of valid transaction categories."""
+    """Enhanced enumeration of valid transaction categories."""
     HOUSING = "Housing"
     TRANSPORTATION = "Transportation"
     FOOD_DINING = "Food & Dining"
@@ -25,7 +27,13 @@ class TransactionCategoryEnum(enum.Enum):
     INCOME = "Income"
     INVESTMENTS = "Investments"
     SAVINGS = "Savings"
+    FEES_CHARGES = "Fees & Charges"
+    ATM_CASH = "ATM & Cash"
+    TRANSFERS = "Transfers"
+    INSURANCE = "Insurance"
+    TAXES = "Taxes"
     OTHER = "Other"
+
 
 
 class BankStatement(Base):

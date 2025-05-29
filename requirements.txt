@@ -145,3 +145,4 @@ langchain-core
 langchain-openai
 langchain
 langchain-community
+pypdf
