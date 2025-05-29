@@ -38,19 +38,22 @@ class Settings(BaseSettings):
             return v
         raise ValueError(v)
     
-    # Supabase settings
-    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
-    SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "")
-    
     # Database settings
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./app.db")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://anas@localhost:5432/finance_advisor")
+    TEST_DATABASE_URL: str = os.getenv("TEST_DATABASE_URL", "postgresql+asyncpg://anas@localhost:5432/finance_advisor_test")
     
     # Logging settings
     LOG_LEVEL: str = "INFO"
     
     # AI model settings
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
-    DEFAULT_MODEL: str = "gpt-4o"
+    DEFAULT_MODEL: str = "gpt-4"
+    
+    # Supabase settings
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
+    SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "")
+    SUPABASE_TEST_URL: str = os.getenv("SUPABASE_TEST_URL", "")
+    SUPABASE_TEST_KEY: str = os.getenv("SUPABASE_TEST_KEY", "")
     
     class Config:
         case_sensitive = True

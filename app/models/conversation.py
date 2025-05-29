@@ -2,6 +2,7 @@ from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 from app.db.database import Base
+import uuid
 
 
 class Conversation(Base):
@@ -10,7 +11,7 @@ class Conversation(Base):
     """
     __tablename__ = "conversations"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.uuid_generate_v4())
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     title = Column(String, nullable=False)
     created_at = Column(DateTime, server_default=func.now())

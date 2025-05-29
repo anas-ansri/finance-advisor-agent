@@ -1,7 +1,8 @@
 import logging
 from typing import List, Optional
+from uuid import UUID
 
-import openai
+from openai import AsyncOpenAI
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,14 +10,15 @@ from app.core.config import settings
 from app.schemas.message import ChatMessage
 from app.services.ai_model import get_ai_model
 from app.services.ai_preference import get_ai_preference_by_user_id
+from app.services.financial_advisor import FinancialAdvisor
+from app.services.user import get_user
 
 logger = logging.getLogger(__name__)
 
-
 async def generate_ai_response(
     db: AsyncSession,
-    user_id: int,
-    conversation_id: int,
+    user_id: UUID,
+    conversation_id: UUID,
     messages: List[ChatMessage],
     model_id: Optional[int] = None,
     temperature: Optional[float] = None,
@@ -38,9 +40,45 @@ async def generate_ai_response(
         Generated response text
     """
     try:
+        # Get user and check API key
+        user = await get_user(db, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        if not user.openai_api_key:
+            raise HTTPException(
+                status_code=400,
+                detail="OpenAI API key not set. Please set your API key in your profile settings."
+            )
+        
         # Get user preferences
         user_preferences = await get_ai_preference_by_user_id(db, user_id=user_id)
         
+        # Get the latest user message
+        latest_user_message = next((m for m in reversed(messages) if m.role == "user"), None)
+        if not latest_user_message:
+            raise ValueError("No user message found in the conversation")
+        
+        # Check if this is a financial query
+        is_financial_query = any(keyword in latest_user_message.content.lower() for keyword in [
+            "money", "finance", "budget", "expense", "income", "saving", "investment",
+            "spending", "cost", "price", "salary", "wage", "debt", "loan", "credit",
+            "bank", "account", "transaction", "balance", "wealth", "asset", "liability",
+            "cash", "payment", "bill", "tax", "interest", "profit", "loss", "revenue",
+            "expense", "financial", "monetary", "economic", "fiscal", "budgetary"
+        ])
+        
+        if is_financial_query:
+            # Use financial advisor for financial queries
+            advisor = FinancialAdvisor(user.openai_api_key)
+            return await advisor.get_advice(
+                db=db,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                query=latest_user_message.content
+            )
+        
+        # For non-financial queries, use the regular AI model
         # Determine which model to use
         model_to_use = None
         if model_id:
@@ -88,9 +126,15 @@ async def generate_ai_response(
                 formatted_messages,
                 model_id_str,
                 temp_to_use,
-                max_tokens_to_use
+                max_tokens_to_use,
+                user.openai_api_key
             )
         elif model_provider == "anthropic":
+            if not user.anthropic_api_key:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Anthropic API key not set. Please set your API key in your profile settings."
+                )
             # Implement Anthropic API integration
             raise NotImplementedError("Anthropic API integration not implemented yet")
         elif model_provider == "local":
@@ -109,13 +153,14 @@ async def generate_openai_response(
     model: str,
     temperature: float,
     max_tokens: Optional[int] = None,
+    api_key: str = None,
 ) -> str:
     """
     Generate a response using the OpenAI API.
     """
     try:
-        # Set API key
-        openai.api_key = settings.OPENAI_API_KEY
+        # Initialize OpenAI client
+        client = AsyncOpenAI(api_key=api_key)
         
         # Prepare request parameters
         params = {
@@ -128,7 +173,7 @@ async def generate_openai_response(
             params["max_tokens"] = max_tokens
         
         # Make API request
-        response = await openai.ChatCompletion.acreate(**params)
+        response = await client.chat.completions.create(**params)
         
         # Extract and return the generated text
         return response.choices[0].message.content

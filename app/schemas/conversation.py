@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import List, Optional
+from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class MessageBase(BaseModel):
@@ -24,11 +25,10 @@ class Message(MessageBase):
     Message schema for API responses.
     """
     id: int
-    conversation_id: int
+    conversation_id: UUID
     created_at: datetime
     
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ConversationBase(BaseModel):
@@ -56,14 +56,13 @@ class Conversation(ConversationBase):
     """
     Conversation schema for API responses.
     """
-    id: int
-    user_id: int
+    id: UUID
+    user_id: UUID
     created_at: datetime
     updated_at: datetime
     messages: List[Message] = []
     
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ConversationList(BaseModel):

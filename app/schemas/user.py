@@ -1,8 +1,9 @@
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 from uuid import UUID
+from decimal import Decimal
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 
 class UserBase(BaseModel):
@@ -10,8 +11,19 @@ class UserBase(BaseModel):
     Base user schema with common attributes.
     """
     email: Optional[EmailStr] = None
-    is_active: Optional[bool] = True
-    is_superuser: bool = False
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    date_of_birth: Optional[date] = None
+    monthly_income: Optional[Decimal] = None
+    employment_status: Optional[str] = None
+    monthly_expenses: Optional[Decimal] = None
+    primary_financial_goal: Optional[str] = None
+    financial_goal_timeline: Optional[str] = None
+    risk_tolerance: Optional[str] = None
+    bio: Optional[str] = None
+    language: Optional[str] = None
+    timezone: Optional[str] = None
+    currency: Optional[str] = None
 
 
 class UserCreate(UserBase):
@@ -19,14 +31,25 @@ class UserCreate(UserBase):
     User creation schema.
     """
     email: EmailStr
-    password: str
 
 
 class UserUpdate(UserBase):
     """
     User update schema.
     """
-    password: Optional[str] = None
+    pass
+
+
+class UserSettingsUpdate(BaseModel):
+    """
+    User settings update schema.
+    """
+    openai_api_key: Optional[str] = None
+    anthropic_api_key: Optional[str] = None
+    ollama_host: Optional[str] = None
+    ollama_model: Optional[str] = None
+    preferred_ai_advisor: Optional[str] = None
+    preferred_categorization_model: Optional[str] = None
 
 
 class UserInDBBase(UserBase):
@@ -36,6 +59,13 @@ class UserInDBBase(UserBase):
     id: UUID
     created_at: datetime
     updated_at: datetime
+    openai_api_key: Optional[str] = None
+    anthropic_api_key: Optional[str] = None
+    ollama_host: Optional[str] = None
+    ollama_model: Optional[str] = None
+    preferred_ai_advisor: Optional[str] = None
+    preferred_categorization_model: Optional[str] = None
+    is_onboarding_done: bool = False
     
     class Config:
         from_attributes = True
