@@ -16,6 +16,7 @@ from app.models.bank_statement import (
     BankCategory,
     TransactionCategoryEnum as DBTransactionCategoryEnum
 )
+from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
