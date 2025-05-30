@@ -1,8 +1,8 @@
-"""changes after fixing conversations
+"""Initialize tables
 
-Revision ID: d7cdc8b0fb8d
-Revises: 5c80897ea0ba
-Create Date: 2025-05-29 15:32:42.427674
+Revision ID: 1273f1ef0fc9
+Revises: f62c75f9110f
+Create Date: 2025-05-30 17:08:58.521961
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'd7cdc8b0fb8d'
-down_revision: Union[str, None] = '5c80897ea0ba'
+revision: str = '1273f1ef0fc9'
+down_revision: Union[str, None] = 'f62c75f9110f'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -51,15 +51,6 @@ def upgrade() -> None:
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
-    )
-    op.create_table('categories',
-    sa.Column('id', sa.UUID(), nullable=False),
-    sa.Column('name', sa.String(), nullable=False),
-    sa.Column('color', sa.String(), nullable=False),
-    sa.Column('icon', sa.String(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-    sa.PrimaryKeyConstraint('id')
     )
     op.create_table('users',
     sa.Column('id', sa.UUID(), nullable=False),
@@ -159,7 +150,7 @@ def upgrade() -> None:
     sa.Column('notes', sa.String(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-    sa.ForeignKeyConstraint(['category_id'], ['categories.id'], ),
+    sa.ForeignKeyConstraint(['category_id'], ['bank_categories.id'], ),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -172,14 +163,6 @@ def upgrade() -> None:
     sa.Column('color', sa.String(), server_default='bg-primary', nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_table('tags',
-    sa.Column('id', sa.UUID(), nullable=False),
-    sa.Column('user_id', sa.UUID(), nullable=False),
-    sa.Column('name', sa.String(), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -201,6 +184,7 @@ def upgrade() -> None:
     op.create_table('bank_transactions',
     sa.Column('id', sa.UUID(), nullable=False),
     sa.Column('statement_id', sa.UUID(), nullable=True),
+    sa.Column('account_id', sa.UUID(), nullable=True),
     sa.Column('date', sa.DateTime(timezone=True), nullable=False),
     sa.Column('description', sa.Text(), nullable=False),
     sa.Column('amount', sa.Float(), nullable=False),
@@ -212,6 +196,7 @@ def upgrade() -> None:
     sa.Column('is_recurring', sa.Boolean(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.ForeignKeyConstraint(['account_id'], ['accounts.id'], ),
     sa.ForeignKeyConstraint(['category_id'], ['bank_categories.id'], ),
     sa.ForeignKeyConstraint(['statement_id'], ['bank_statements.id'], ),
     sa.PrimaryKeyConstraint('id')
@@ -226,23 +211,6 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_messages_id'), 'messages', ['id'], unique=False)
-    op.create_table('transactions',
-    sa.Column('id', sa.UUID(), nullable=False),
-    sa.Column('user_id', sa.UUID(), nullable=False),
-    sa.Column('account_id', sa.UUID(), nullable=False),
-    sa.Column('category_id', sa.UUID(), nullable=True),
-    sa.Column('description', sa.String(), nullable=False),
-    sa.Column('amount', sa.Numeric(), nullable=False),
-    sa.Column('date', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('is_recurring', sa.Boolean(), server_default='false', nullable=False),
-    sa.Column('notes', sa.String(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-    sa.ForeignKeyConstraint(['account_id'], ['accounts.id'], ),
-    sa.ForeignKeyConstraint(['category_id'], ['categories.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
     op.create_table('bank_transaction_tags',
     sa.Column('transaction_id', sa.UUID(), nullable=False),
     sa.Column('tag_id', sa.UUID(), nullable=False),
@@ -251,27 +219,17 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['transaction_id'], ['bank_transactions.id'], ),
     sa.PrimaryKeyConstraint('transaction_id', 'tag_id')
     )
-    op.create_table('transaction_tags',
-    sa.Column('transaction_id', sa.UUID(), nullable=False),
-    sa.Column('tag_id', sa.UUID(), nullable=False),
-    sa.ForeignKeyConstraint(['tag_id'], ['tags.id'], ),
-    sa.ForeignKeyConstraint(['transaction_id'], ['transactions.id'], ),
-    sa.PrimaryKeyConstraint('transaction_id', 'tag_id')
-    )
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     """Downgrade schema."""
     # ### commands auto generated by Alembic - please adjust! ###
-    op.drop_table('transaction_tags')
     op.drop_table('bank_transaction_tags')
-    op.drop_table('transactions')
     op.drop_index(op.f('ix_messages_id'), table_name='messages')
     op.drop_table('messages')
     op.drop_table('bank_transactions')
     op.drop_table('bank_statement_metadata')
-    op.drop_table('tags')
     op.drop_table('financial_goals')
     op.drop_table('expenses')
     op.drop_index(op.f('ix_conversations_id'), table_name='conversations')
@@ -283,7 +241,6 @@ def downgrade() -> None:
     op.drop_table('accounts')
     op.drop_index(op.f('ix_users_email'), table_name='users')
     op.drop_table('users')
-    op.drop_table('categories')
     op.drop_table('bank_tags')
     op.drop_table('bank_categories')
     op.drop_index(op.f('ix_ai_models_id'), table_name='ai_models')

@@ -14,7 +14,7 @@ class Expense(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    category_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"))
+    category_id = Column(UUID(as_uuid=True), ForeignKey("bank_categories.id"))
     description = Column(String, nullable=False)
     amount = Column(Numeric, nullable=False)
     date = Column(DateTime(timezone=True), nullable=False)
@@ -26,8 +26,8 @@ class Expense(Base):
     
     # Relationships
     user = relationship("User", back_populates="expenses")
-    category = relationship("Category", back_populates="expenses")
+    category = relationship("BankCategory", back_populates="expenses")
 
 
 # Import at the bottom to avoid circular imports
-from app.models.category import Category 
+from app.models.bank_category import BankCategory 

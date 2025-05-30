@@ -8,14 +8,13 @@ from langchain_text_splitters import TokenTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from sqlalchemy.orm import Session
 from sqlalchemy import select
+from app.models.bank_statement_metadata import BankStatementMetadata
 from app.schemas.bank_statement import BankStatementWithData, StatementMetadata, BankTransaction, TransactionCategoryEnum
-from app.models.bank_statement import (
-    BankStatement,
-    BankTransaction as BankTransactionModel,
-    BankStatementMetadata,
-    BankCategory,
-    TransactionCategoryEnum as DBTransactionCategoryEnum
-)
+from app.models.bank_statement import BankStatement
+from app.models.bank_transaction import BankTransaction as BankTransactionModel, TransactionCategoryEnum as DBTransactionCategoryEnum
+from app.models.bank_transaction_tag import BankTransactionTag
+from app.models.bank_tags import BankTag
+from app.models.bank_category import BankCategory
 from uuid import UUID
 
 logger = logging.getLogger(__name__)

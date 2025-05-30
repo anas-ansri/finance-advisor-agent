@@ -1,8 +1,8 @@
-"""user to bank statements relations
+"""Initialize database
 
-Revision ID: b43ab3232b98
-Revises: e7642b62d503
-Create Date: 2025-05-26 22:55:39.246506
+Revision ID: f62c75f9110f
+Revises: 5745e0eb5222
+Create Date: 2025-05-30 17:03:38.673620
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'b43ab3232b98'
-down_revision: Union[str, None] = 'e7642b62d503'
+revision: str = 'f62c75f9110f'
+down_revision: Union[str, None] = '5745e0eb5222'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

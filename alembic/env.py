@@ -3,12 +3,8 @@ from logging.config import fileConfig
 import os
 import sys
 
-
-
 # Add the project root directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
@@ -19,6 +15,21 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from app.db.database import Base
 from app.core.config import settings
 
+# Import all models
+from app.models.user import User
+from app.models.expense import Expense
+from app.models.bank_category import BankCategory
+from app.models.bank_statement import BankStatement
+from app.models.account import Account
+from app.models.bank_statement_metadata import BankStatementMetadata
+from app.models.bank_tags import BankTag
+from app.models.bank_transaction_tag import BankTransactionTag
+from app.models.bank_transaction import BankTransaction
+from app.models.conversation import Conversation
+from app.models.financial_goal import FinancialGoal
+from app.models.ai_preference import AIPreference
+from app.models.ai_insight import AIInsight
+from app.models.ai_model import AIModel
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -67,6 +78,9 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
+    # Enable UUID extension
+    connection.execute("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";")
+    
     context.configure(connection=connection, target_metadata=target_metadata)
 
     with context.begin_transaction():

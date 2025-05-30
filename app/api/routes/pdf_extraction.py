@@ -21,7 +21,6 @@ from app.schemas.bank_statement import (
     BankStatementWithData,
     BankTransaction as BankTransactionSchema,
     StatementMetadata,
-    Tag,
     TransactionCategoryEnum
 )
 import logging

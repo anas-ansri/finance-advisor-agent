@@ -8,8 +8,7 @@ from app.models.ai_insight import AIInsight
 from app.models.account import Account
 from app.models.expense import Expense
 from app.models.financial_goal import FinancialGoal
-from app.models.tag import Tag
-from app.models.transaction import Transaction
+from app.models.ai_preference import AIPreference
 
 
 class User(Base):
@@ -50,13 +49,11 @@ class User(Base):
     accounts = relationship("Account", back_populates="user", cascade="all, delete-orphan")
     expenses = relationship("Expense", back_populates="user", cascade="all, delete-orphan")
     financial_goals = relationship("FinancialGoal", back_populates="user", cascade="all, delete-orphan")
-    tags = relationship("Tag", back_populates="user", cascade="all, delete-orphan")
-    transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
     ai_preferences = relationship("AIPreference", back_populates="user", uselist=False, cascade="all, delete-orphan")
     statements = relationship("BankStatement", back_populates="user", cascade="all, delete-orphan")
+    ai_insights = relationship("AIInsight", back_populates="user", cascade="all, delete-orphan")
 
 
 # Import at the bottom to avoid circular imports
 from app.models.conversation import Conversation
-from app.models.ai_preference import AIPreference
 from app.models.bank_statement import BankStatement
