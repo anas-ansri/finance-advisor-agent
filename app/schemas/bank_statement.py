@@ -63,6 +63,9 @@ class BankTransaction(BaseModel):
         ...,
         description="The exact text from which this transaction information was extracted."
     )
+    account_id: Optional[UUID] = Field(
+        None, description="The ID of the account associated with this transaction."
+    )
 
 
 class StatementMetadata(BaseModel):

@@ -119,6 +119,7 @@ class BankTransaction(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     statement_id = Column(UUID(as_uuid=True), ForeignKey("bank_statements.id"))
+    account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id"), nullable=True)
     date = Column(DateTime(timezone=True), nullable=False)
     description = Column(Text, nullable=False)
     amount = Column(Float, nullable=False)
@@ -137,6 +138,7 @@ class BankTransaction(Base):
     statement = relationship("BankStatement", back_populates="transactions")
     category = relationship("BankCategory", back_populates="transactions")
     tags = relationship("BankTag", secondary="bank_transaction_tags", back_populates="transactions")
+    account = relationship("Account", back_populates="bank_transactions")
 
 
 class BankTransactionTag(Base):

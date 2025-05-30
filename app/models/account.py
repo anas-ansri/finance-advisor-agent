@@ -25,3 +25,4 @@ class Account(Base):
     # Relationships
     user = relationship("User", back_populates="accounts")
     transactions = relationship("Transaction", back_populates="account", cascade="all, delete-orphan")
+    bank_transactions = relationship("BankTransaction", back_populates="account", cascade="all, delete-orphan")

@@ -16,6 +16,7 @@ from app.models.bank_statement import (
     BankCategory,
     TransactionCategoryEnum as DBTransactionCategoryEnum
 )
+from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
@@ -81,8 +82,8 @@ class BankStatementExtractor:
                 "3. AMOUNT: Negative for debits/withdrawals, positive for credits/deposits\n"
                 "4. BALANCE: Account balance after transaction (if shown)\n"
                 "5. TRANSACTION_TYPE: 'debit', 'credit', 'fee', 'interest', etc.\n"
-                "6. REFERENCE_NUMBER: Check numbers, transaction IDs, etc.\n"
-                "7. CATEGORY: Categorize each transaction into one of these categories:\n"
+                "6. REFERENCE_NUMBER: Check numbers, transaction IDs, etc.(Get it from the transactions context)\n"
+                "7. CATEGORY: Categorize each transaction into one of these categories:(Infer category from transaction description)\n"
                 "   - INCOME: Salary, deposits, credits, interest\n"
                 "   - HOUSING: Rent, mortgage, utilities\n"
                 "   - TRANSPORTATION: Gas, car payments, public transport\n"
@@ -249,7 +250,8 @@ class BankStatementExtractor:
                              metadata: StatementMetadata,
                              transactions: List[BankTransaction],
                              title: str,
-                             description: Optional[str] = None) -> BankStatement:
+                             description: Optional[str] = None,
+                             account_id: Optional[UUID] = None) -> BankStatement:
         """Save extracted data to database with enhanced error handling."""
         
         try:
@@ -284,6 +286,7 @@ class BankStatementExtractor:
 
                 db_transaction = BankTransactionModel(
                     statement_id=db_statement.id,
+                    account_id=account_id,
                     date=transaction.date,
                     description=transaction.description,
                     amount=transaction.amount,
