@@ -249,7 +249,8 @@ class BankStatementExtractor:
                              metadata: StatementMetadata,
                              transactions: List[BankTransaction],
                              title: str,
-                             description: Optional[str] = None) -> BankStatement:
+                             description: Optional[str] = None,
+                             account_id: Optional[UUID] = None) -> BankStatement:
         """Save extracted data to database with enhanced error handling."""
         
         try:
@@ -284,6 +285,7 @@ class BankStatementExtractor:
 
                 db_transaction = BankTransactionModel(
                     statement_id=db_statement.id,
+                    account_id=account_id,
                     date=transaction.date,
                     description=transaction.description,
                     amount=transaction.amount,

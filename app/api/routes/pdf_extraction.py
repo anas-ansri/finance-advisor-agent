@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 import tempfile
 import os
 from typing import Optional, List, Dict, Any
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -13,6 +14,7 @@ from app.core.security import get_current_user
 from app.db.database import get_db
 from app.models.user import User
 from app.models.bank_statement import BankStatement, BankTransaction as BankTransactionModel
+from app.models.account import Account
 from app.services.pdf_extraction import BankStatementExtractor
 from app.schemas.bank_statement import (
     BankStatement as BankStatementSchema,
@@ -42,7 +44,8 @@ def convert_to_schema(db_statement: BankStatement) -> BankStatementWithData:
             category=t.category.name.value if t.category else None,
             reference_number=t.reference_number,
             is_recurring=t.is_recurring,
-            evidence=t.evidence
+            evidence=t.evidence,
+            account_id=t.account_id
         )
         transactions.append(transaction)
     
@@ -75,6 +78,7 @@ async def extract_bank_statement(
     file: UploadFile = File(...),
     title: str = Form(...),
     description: Optional[str] = Form(None),
+    account_id: Optional[UUID] = Form(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -83,6 +87,18 @@ async def extract_bank_statement(
     # Validate file type
     if not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
+
+    # Validate account_id if provided
+    if account_id:
+        # Check if account exists and belongs to user
+        stmt = select(Account).where(
+            Account.id == account_id,
+            Account.user_id == current_user.id
+        )
+        result = await db.execute(stmt)
+        account = result.scalar_one_or_none()
+        if not account:
+            raise HTTPException(status_code=404, detail="Account not found or does not belong to user")
 
     # Create temporary file
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
@@ -118,7 +134,8 @@ async def extract_bank_statement(
             metadata=statement_metadata,
             transactions=transactions,
             title=title,
-            description=description
+            description=description,
+            account_id=account_id
         )
 
         # Schedule cleanup
