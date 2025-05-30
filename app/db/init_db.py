@@ -1,7 +1,7 @@
 # app/db/init_db.py
 from sqlalchemy.orm import Session
 
-from app.models.bank_statement import BankCategory, TransactionCategoryEnum
+from app.models.bank_category import BankCategory, TransactionCategoryEnum
 
 
 def init_categories(db: Session) -> None:
@@ -27,7 +27,7 @@ def init_categories(db: Session) -> None:
         BankCategory(name=TransactionCategoryEnum.INCOME, description="Income including salary, freelance work, etc."),
         BankCategory(name=TransactionCategoryEnum.INVESTMENTS, description="Investment transactions including stocks, bonds, etc."),
         BankCategory(name=TransactionCategoryEnum.SAVINGS, description="Savings transactions including transfers to savings accounts, etc."),
-        BankCategory(name=TransactionCategoryEnum.OTHER, description="Other transactions that don't fit into the above categories")
+        BankCategory(name=TransactionCategoryEnum.NOT_CATEGORIZED, description="Transactions that do not fit into any specific category."),
     ]
     
     db.add_all(categories)

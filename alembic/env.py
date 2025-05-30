@@ -7,6 +7,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
+from sqlalchemy import text
 
 from alembic import context
 
@@ -79,7 +80,7 @@ def run_migrations_offline() -> None:
 
 def do_run_migrations(connection: Connection) -> None:
     # Enable UUID extension
-    connection.execute("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";")
+    connection.execute(text("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"))
     
     context.configure(connection=connection, target_metadata=target_metadata)
 

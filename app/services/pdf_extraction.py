@@ -42,12 +42,12 @@ class BankStatementExtractor:
             raise ValueError("OpenAI API key must be provided or set as environment variable")
 
         # Initialize LLM with higher temperature for better extraction
-        self.llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0.1)
+        self.llm = ChatOpenAI(model_name="gpt-4o", temperature=0.1)
 
         # Create text splitter for chunking
         self.text_splitter = TokenTextSplitter(
-            chunk_size=3000,
-            chunk_overlap=300,
+            chunk_size=2000,
+            chunk_overlap=200,
         )
 
         # Enhanced metadata extraction prompt
@@ -86,7 +86,7 @@ class BankStatementExtractor:
                 "   - INCOME: Salary, deposits, credits, interest\n"
                 "   - HOUSING: Rent, mortgage, utilities\n"
                 "   - TRANSPORTATION: Gas, car payments, public transport\n"
-                "   - FOOD_DINING: Groceries, restaurants, food purchases\n"
+                "   - FOOD_DINING: Groceries, supermarkets (Walmart, Target, Costco), restaurants, fast food (McDonald's, Burger King), coffee shops (Starbucks), food delivery (Uber Eats, DoorDash), bakeries, meal kits (HelloFresh)\n"
                 "   - SHOPPING: Retail purchases, general shopping\n"
                 "   - ENTERTAINMENT: Movies, games, subscriptions\n"
                 "   - UTILITIES: Phone, internet, electricity, water\n"
@@ -97,8 +97,15 @@ class BankStatementExtractor:
                 "   - GIFTS_DONATIONS: Gifts, charitable donations\n"
                 "   - INVESTMENTS: Investment accounts, securities\n"
                 "   - SAVINGS: Savings transfers, deposits\n"
-                "   - OTHER: Anything that doesn't fit above categories\n\n"
-                "8. EVIDENCE: The exact text line from which this transaction was extracted\n\n"
+                "8. IS_RECURRING: Set to true if the transaction description contains keywords like:\n"
+                "   - 'Mandate request'\n"
+                "   - 'Subscription'\n"
+                "   - 'Google Play mandate'\n"
+                "   - 'Recurring payment'\n"
+                "   - 'Auto-pay'\n"
+                "   - 'Standing order'\n"
+                "   - 'Direct debit'\n"
+                "9. EVIDENCE: The exact text line from which this transaction was extracted\n\n"
                 "Look for transaction tables, check lists, and detailed transaction sections. "
                 "Include ALL transactions found in the text."
             ),
@@ -230,14 +237,13 @@ class BankStatementExtractor:
             return category
 
         except (ValueError, KeyError, AttributeError):
-            # If the category doesn't match our enum, use OTHER
             result = await db.execute(
-                select(BankCategory).filter(BankCategory.name == DBTransactionCategoryEnum.OTHER)
+                select(BankCategory).filter(BankCategory.name == DBTransactionCategoryEnum.NOT_CATEGORIZED)
             )
             category = result.scalar_one_or_none()
             
             if not category:
-                category = BankCategory(name=DBTransactionCategoryEnum.OTHER)
+                category = BankCategory(name=DBTransactionCategoryEnum.NOT_CATEGORIZED)
                 db.add(category)
                 await db.flush()
 

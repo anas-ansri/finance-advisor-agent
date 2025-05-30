@@ -1,8 +1,8 @@
-"""Initialize tables
+"""initial migrations
 
-Revision ID: 1273f1ef0fc9
-Revises: f62c75f9110f
-Create Date: 2025-05-30 17:08:58.521961
+Revision ID: f1d14443fc26
+Revises: d123240ae7f7
+Create Date: 2025-05-30 18:46:42.926345
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '1273f1ef0fc9'
-down_revision: Union[str, None] = 'f62c75f9110f'
+revision: str = 'f1d14443fc26'
+down_revision: Union[str, None] = 'd123240ae7f7'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -38,7 +38,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_ai_models_id'), 'ai_models', ['id'], unique=False)
     op.create_table('bank_categories',
     sa.Column('id', sa.UUID(), nullable=False),
-    sa.Column('name', sa.Enum('HOUSING', 'TRANSPORTATION', 'FOOD_DINING', 'ENTERTAINMENT', 'SHOPPING', 'UTILITIES', 'HEALTH_MEDICAL', 'PERSONAL_CARE', 'EDUCATION', 'TRAVEL', 'GIFTS_DONATIONS', 'INCOME', 'INVESTMENTS', 'SAVINGS', 'FEES_CHARGES', 'ATM_CASH', 'TRANSFERS', 'INSURANCE', 'TAXES', 'OTHER', name='transactioncategoryenum'), nullable=False),
+    sa.Column('name', sa.Enum('HOUSING', 'TRANSPORTATION', 'FOOD_DINING', 'ENTERTAINMENT', 'SHOPPING', 'UTILITIES', 'HEALTH_MEDICAL', 'PERSONAL_CARE', 'EDUCATION', 'TRAVEL', 'GIFTS_DONATIONS', 'INCOME', 'INVESTMENTS', 'SAVINGS', 'FEES_CHARGES', 'ATM_CASH', 'TRANSFERS', 'INSURANCE', 'TAXES', 'NOT_CATEGORIZED', name='transactioncategoryenum'), nullable=False),
     sa.Column('description', sa.Text(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),

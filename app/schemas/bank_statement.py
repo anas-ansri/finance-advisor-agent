@@ -29,7 +29,7 @@ class TransactionCategoryEnum(str, Enum):
     TRANSFERS = "Transfers"
     INSURANCE = "Insurance"
     TAXES = "Taxes"
-    OTHER = "Other"
+    NOT_CATEGORIZED = "Not Categorized"
 
 
 class BankTransaction(BaseModel):
