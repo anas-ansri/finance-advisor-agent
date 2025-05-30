@@ -1,34 +1,24 @@
 import asyncio
+from logging.config import fileConfig
 import os
 import sys
-from logging.config import fileConfig
+
+
 
 # Add the project root directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+
+from sqlalchemy import engine_from_config
+from sqlalchemy import pool
+
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine
-
-from app.core.config import settings
 from app.db.database import Base
-from app.models.account import Account
-from app.models.ai_insight import AIInsight
-from app.models.bank_statement import (
-    BankStatement,
-    BankStatementMetadata,
-    BankCategory,
-    BankTag,
-    BankTransaction,
-    BankTransactionTag,
-)
-from app.models.category import Category
-from app.models.expense import Expense
-from app.models.financial_goal import FinancialGoal
-from app.models.tag import Tag
-from app.models.transaction import Transaction, TransactionTag
-from app.models.user import User
+from app.core.config import settings
+
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
