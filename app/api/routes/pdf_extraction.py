@@ -1,10 +1,12 @@
 # app/api/routes/pdf_extraction.py
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks, Form
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks, Form, Request
+from fastapi.responses import StreamingResponse
 import tempfile
 import os
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, AsyncGenerator
 from uuid import UUID
+import asyncio
+import json
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -71,6 +73,30 @@ def convert_to_schema(db_statement: BankStatement) -> BankStatementWithData:
         transactions=transactions
     )
 
+async def progress_generator(task_id: str) -> AsyncGenerator[str, None]:
+    """Generate progress updates for a task."""
+    try:
+        # Simulate progress updates
+        for progress in range(0, 101, 10):
+            yield f"data: {json.dumps({'task_id': task_id, 'progress': progress, 'status': 'Processing' if progress < 100 else 'Complete'})}\n\n"
+            await asyncio.sleep(1)
+    except Exception as e:
+        logger.error(f"Progress generator error: {str(e)}")
+        yield f"data: {json.dumps({'task_id': task_id, 'error': str(e)})}\n\n"
+
+@router.get("/progress/{task_id}")
+async def get_progress(task_id: str):
+    """Get progress updates for a task using Server-Sent Events."""
+    return StreamingResponse(
+        progress_generator(task_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
 @router.post("/extract-bank-statement/", response_model=BankStatementWithData)
 async def extract_bank_statement(
     background_tasks: BackgroundTasks,
@@ -78,6 +104,7 @@ async def extract_bank_statement(
     title: str = Form(...),
     description: Optional[str] = Form(None),
     account_id: Optional[UUID] = Form(None),
+    task_id: str = Form(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -124,6 +151,7 @@ async def extract_bank_statement(
         # Validate extraction results
         if not transactions:
             logger.warning("No transactions extracted from PDF")
+            raise HTTPException(status_code=400, detail="No transactions could be extracted from the PDF")
         
         # Save to database
         print("Saving to database...")
