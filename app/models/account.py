@@ -24,8 +24,8 @@ class Account(Base):
     
     # Relationships
     user = relationship("User", back_populates="accounts")
-    bank_transactions = relationship("BankTransaction", back_populates="account", cascade="all, delete-orphan")
+    transactions = relationship("BankTransaction", back_populates="account", cascade="all, delete-orphan")
 
 
 # Import at the bottom to avoid circular imports
-from app.models.bank_statement import BankTransaction
+from app.models.bank_transaction import BankTransaction

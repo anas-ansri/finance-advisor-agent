@@ -59,7 +59,6 @@ class BankTransaction(Base):
     
     # Relationships
     statement = relationship("BankStatement", back_populates="bank_transactions")
-    bank_categories = relationship("BankCategory", back_populates="bank_transactions")
-    tags = relationship("BankTag", secondary="bank_transaction_tags", back_populates="bank_transactions")
-    accounts = relationship("Account", back_populates="bank_transactions")
-    user = relationship("User", back_populates="bank_transactions")
+    category = relationship("BankCategory", back_populates="transactions")
+    account = relationship("Account", back_populates="transactions")
+    user = relationship("User", back_populates="transactions")

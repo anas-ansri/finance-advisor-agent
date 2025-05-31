@@ -27,5 +27,8 @@ class BankCategory(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Relationships
-    bank_transactions = relationship("BankTransaction", back_populates="bank_categories")
+    transactions = relationship("BankTransaction", back_populates="category")
     expenses = relationship("Expense", back_populates="category")
+
+from app.models.bank_transaction import BankTransaction
+from app.models.expense import Expense
