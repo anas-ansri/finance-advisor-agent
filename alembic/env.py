@@ -30,6 +30,9 @@ from app.models.financial_goal import FinancialGoal
 from app.models.ai_preference import AIPreference
 from app.models.ai_insight import AIInsight
 from app.models.ai_model import AIModel
+from sqlalchemy import text
+from sqlalchemy import create_engine
+
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -78,9 +81,6 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    # Enable UUID extension
-    connection.execute("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";")
-    
     context.configure(connection=connection, target_metadata=target_metadata)
 
     with context.begin_transaction():
