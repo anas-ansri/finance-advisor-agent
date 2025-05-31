@@ -24,23 +24,24 @@ class FinancialAdvisor:
         self.system_prompt = """You are a financial advisor AI. Your responses must follow these rules:
 
 1. Data Rules:
-   - ONLY use the financial data provided in the context
+   - Use the financial data provided in the context to give personalized insights
    - If no data is available, respond with "I don't have any financial data to analyze"
-   - NEVER make assumptions about the user's financial situation
-   - NEVER provide generic financial advice without specific data
+   - Base your advice on the actual transaction patterns and financial goals shown
+   - Use specific numbers and patterns from the data to support your recommendations
 
 2. Response Rules:
-   - For greetings, only respond with a simple greeting
-   - When analyzing data, only use numbers that are explicitly provided
-   - If asked about something not in the data, say "I don't have that information"
-   - Keep responses concise and focused on available data
+   - For greetings, respond with a friendly greeting and ask how you can help
+   - When analyzing data, highlight specific patterns and trends you observe
+   - If asked about something not in the data, explain what data would be needed
+   - Provide actionable insights based on the available transaction history
+   - Keep responses clear and focused on the data available
 
-3. What NOT to do:
-   - DO NOT make assumptions about risk profile
-   - DO NOT suggest emergency funds without expense data
-   - DO NOT discuss investments without investment data
-   - DO NOT provide generic financial advice
-   - DO NOT make statements about financial health without metrics"""
+3. What to do:
+   - Analyze spending patterns and suggest potential areas for optimization
+   - Identify recurring expenses and their impact
+   - Point out investment opportunities based on current investment behavior
+   - Suggest financial goals based on income and spending patterns
+   - Provide specific, data-backed recommendations"""
 
     def _is_greeting(self, text: str) -> bool:
         """Check if the input is a greeting"""
@@ -52,10 +53,11 @@ class FinancialAdvisor:
         try:
             # Get transactions
             result = await db.execute(
-                text("SELECT * FROM transactions WHERE user_id = :user_id"),
+                text("SELECT * FROM bank_transactions WHERE user_id = :user_id"),
                 {"user_id": user_id}
             )
             transactions = result.fetchall()
+            print(f"Retrieved {len(transactions)} transactions for user {user_id}")
             
             if not transactions:
                 return False, "No financial data available"
@@ -70,31 +72,55 @@ class FinancialAdvisor:
             goals = goals_result.fetchall()
             goals_df = pd.DataFrame(goals) if goals else pd.DataFrame()
             
-            # Calculate metrics
+            # Calculate basic metrics
             total_transactions = len(df)
             total_income = df[df['amount'] > 0]['amount'].sum()
             total_expenses = abs(df[df['amount'] < 0]['amount'].sum())
             
-            # Check if we have any real data
-            if total_transactions == 0 and goals_df.empty:
-                return False, "No financial data available"
-            
-            # Get recent transactions
-            recent_transactions = df.sort_values('date', ascending=False).head(5)
-            
-            # Format the data summary
+            # Initialize data summary
             data_summary = f"""
 Available Financial Data:
 - Total Transactions: {total_transactions}
 - Total Income: ₹{total_income:,.2f}
 - Total Expenses: ₹{total_expenses:,.2f}
-
-Recent Transactions:
-{recent_transactions[['date', 'description', 'amount']].to_string() if not recent_transactions.empty else 'No recent transactions'}
-
-Financial Goals:
-{goals_df[['name', 'target', 'current']].to_string() if not goals_df.empty else 'No financial goals set'}
+- Net Savings: ₹{(total_income - total_expenses):,.2f}
 """
+            
+            # Add category analysis if category field exists
+            if 'category' in df.columns:
+                category_expenses = df[df['amount'] < 0].groupby('category')['amount'].sum().abs()
+                category_expenses = category_expenses.sort_values(ascending=False)
+                data_summary += f"\nExpense Categories (Top 5):\n{category_expenses.head().to_string()}\n"
+            
+            # Add monthly trends if date field exists
+            if 'date' in df.columns:
+                try:
+                    df['month'] = pd.to_datetime(df['date']).dt.to_period('M')
+                    monthly_income = df[df['amount'] > 0].groupby('month')['amount'].sum()
+                    monthly_expenses = df[df['amount'] < 0].groupby('month')['amount'].sum().abs()
+                    data_summary += f"\nMonthly Trends (Last 3 months):\nIncome: {monthly_income.tail(3).to_string()}\nExpenses: {monthly_expenses.tail(3).to_string()}\n"
+                except Exception as e:
+                    logger.warning(f"Could not process monthly trends: {str(e)}")
+            
+            # Add investment analysis if category field exists
+            if 'category' in df.columns:
+                investment_transactions = df[df['category'] == 'INVESTMENTS']
+                if not investment_transactions.empty:
+                    data_summary += f"\nInvestment Activity:\n{investment_transactions[['date', 'description', 'amount']].to_string()}\n"
+            
+            # Add recent transactions
+            recent_cols = ['date', 'description', 'amount']
+            if 'category' in df.columns:
+                recent_cols.append('category')
+            
+            recent_transactions = df.sort_values('date', ascending=False).head(5)[recent_cols]
+            data_summary += f"\nRecent Transactions:\n{recent_transactions.to_string()}\n"
+            
+            # Add financial goals
+            if not goals_df.empty:
+                data_summary += f"\nFinancial Goals:\n{goals_df[['name', 'target', 'current']].to_string()}\n"
+            
+            logger.info(f"Financial data summary for user {user_id}:\n{data_summary}")
             return True, data_summary
             
         except Exception as e:
@@ -142,7 +168,7 @@ User Query: {query}
 
 Remember: Only use the data provided above. If you don't have the specific data needed, say "I don't have enough information to answer that".
 """
-            
+            print(f"Generated prompt for LLM:\n{prompt}")
             # Get response from LLM
             result = self.llm.invoke(prompt)
             return result
