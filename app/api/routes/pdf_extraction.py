@@ -27,6 +27,8 @@ from app.schemas.bank_statement import (
 )
 import logging
 
+from app.services.ai import generate_financial_insights
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -180,6 +182,10 @@ async def extract_bank_statement(
         complete_statement = result.scalar_one()
 
         print(f"Successfully processed statement: {complete_statement.title}")
+        
+        # Trigger AI insight generation as a background task
+        background_tasks.add_task(generate_financial_insights, db, current_user.id)
+
         return convert_to_schema(complete_statement)
 
     except Exception as e:
