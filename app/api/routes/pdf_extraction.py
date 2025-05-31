@@ -33,7 +33,7 @@ def convert_to_schema(db_statement: BankStatement) -> BankStatementWithData:
     """Convert database model to Pydantic schema."""
     # Convert transactions
     transactions = []
-    for t in db_statement.transactions:
+    for t in db_statement.bank_transactions:
         transaction = BankTransactionSchema(
             date=t.date,
             description=t.description,
@@ -144,7 +144,7 @@ async def extract_bank_statement(
         stmt = select(BankStatement).where(
             BankStatement.id == db_statement.id
         ).options(
-            selectinload(BankStatement.transactions).selectinload(BankTransactionModel.category),
+            selectinload(BankStatement.bank_transactions).selectinload(BankTransactionModel.category),
             selectinload(BankStatement.statement_metadata)
         )
 
@@ -173,7 +173,7 @@ async def get_statement_analysis(
         BankStatement.user_id == current_user.id,
         BankStatement.is_active == True
     ).options(
-        selectinload(BankStatement.transactions).selectinload(BankTransactionModel.category),
+        selectinload(BankStatement.bank_transactions).selectinload(BankTransactionModel.category),
         selectinload(BankStatement.statement_metadata)
     )
 
@@ -184,7 +184,7 @@ async def get_statement_analysis(
         raise HTTPException(status_code=404, detail="Bank statement not found")
 
     # Calculate analysis
-    transactions = statement.transactions
+    transactions = statement.bank_transactions
     total_credits = sum(t.amount for t in transactions if t.amount > 0)
     total_debits = sum(abs(t.amount) for t in transactions if t.amount < 0)
     
@@ -246,7 +246,7 @@ async def get_bank_statement_with_data(
         BankStatement.user_id == current_user.id,
         BankStatement.is_active == True
     ).options(
-        selectinload(BankStatement.transactions).selectinload(BankTransactionModel.category),
+        selectinload(BankStatement.bank_transactions).selectinload(BankTransactionModel.category),
         selectinload(BankStatement.statement_metadata)
     )
     

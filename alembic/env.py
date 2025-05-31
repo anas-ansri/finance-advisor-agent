@@ -22,8 +22,6 @@ from app.models.bank_category import BankCategory
 from app.models.bank_statement import BankStatement
 from app.models.account import Account
 from app.models.bank_statement_metadata import BankStatementMetadata
-from app.models.bank_tags import BankTag
-from app.models.bank_transaction_tag import BankTransactionTag
 from app.models.bank_transaction import BankTransaction
 from app.models.conversation import Conversation
 from app.models.financial_goal import FinancialGoal

@@ -12,8 +12,6 @@ from app.models.bank_statement_metadata import BankStatementMetadata
 from app.schemas.bank_statement import BankStatementWithData, StatementMetadata, BankTransaction, TransactionCategoryEnum
 from app.models.bank_statement import BankStatement
 from app.models.bank_transaction import BankTransaction as BankTransactionModel, TransactionCategoryEnum as DBTransactionCategoryEnum
-from app.models.bank_transaction_tag import BankTransactionTag
-from app.models.bank_tags import BankTag
 from app.models.bank_category import BankCategory
 from uuid import UUID
 
@@ -286,6 +284,7 @@ class BankStatementExtractor:
                 db_transaction = BankTransactionModel(
                     statement_id=db_statement.id,
                     account_id=account_id,
+                    user_id=user_id,
                     date=transaction.date,
                     description=transaction.description,
                     amount=transaction.amount,

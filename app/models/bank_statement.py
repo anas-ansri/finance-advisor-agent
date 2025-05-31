@@ -24,6 +24,6 @@ class BankStatement(Base):
     
     # Relationships
     user = relationship("User", back_populates="statements")
-    transactions = relationship("BankTransaction", back_populates="statement", cascade="all, delete-orphan")
+    bank_transactions = relationship("BankTransaction", back_populates="statement", cascade="all, delete-orphan")
     statement_metadata = relationship("BankStatementMetadata", back_populates="statement", uselist=False, cascade="all, delete-orphan")
 
