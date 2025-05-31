@@ -6,6 +6,10 @@ import pandas as pd
 from sqlalchemy import delete, text, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
+from pydantic import BaseModel, Field
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from langchain.output_parsers import PydanticOutputParser
 
 from openai import AsyncOpenAI
 from fastapi import HTTPException
@@ -22,6 +26,17 @@ from app.services.transaction import get_all_transactions
 from app.models.bank_transaction import BankTransaction
 
 logger = logging.getLogger(__name__)
+
+class FinancialInsight(BaseModel):
+    """Model for a single financial insight."""
+    title: str = Field(..., description="Clear, concise title for the insight")
+    description: str = Field(..., description="Detailed explanation with specific numbers and actionable steps")
+    category: str = Field(..., description="Category of the insight (spending or recommendation)")
+    priority: int = Field(..., description="Priority level from 1-5, where 5 is highest")
+
+class FinancialInsights(BaseModel):
+    """Model for a list of financial insights."""
+    insights: List[FinancialInsight] = Field(..., min_items=5, max_items=7, description="List of financial insights")
 
 async def generate_ai_response(
     db: AsyncSession,
@@ -193,8 +208,6 @@ async def generate_openai_response(
 async def generate_financial_insights(
     db: AsyncSession,
     user_id: UUID,
-    # Optional: provide the new statement ID if insights should focus on it
-    # new_statement_id: Optional[UUID] = None
 ):
     """Generates AI-powered financial insights for the user."""
     print(f"Generating insights for user: {user_id}")
@@ -222,8 +235,31 @@ async def generate_financial_insights(
         'category': str(t.category.name) if t.category else 'Uncategorized'
     } for t in transactions])
     
-    # Initialize OpenAI client
-    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    # Initialize LangChain components
+    llm = ChatOpenAI(
+        model="gpt-4-turbo",
+        temperature=0.2,
+        api_key=settings.OPENAI_API_KEY
+    )
+    
+    # Create the prompt template
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", """You are an expert financial advisor AI. Analyze the provided financial data and generate personalized insights.
+Focus on:
+1. Progress towards financial goals
+2. Spending patterns and optimization opportunities
+3. Savings and investment recommendations
+4. Risk assessment and mitigation strategies
+5. Actionable next steps
+
+You must generate 5-7 specific, actionable insights based on the user's actual financial data.
+Each insight must be specific and actionable, with concrete numbers and steps.
+
+Financial Data:
+{data_summary}
+
+{format_instructions}"""),
+    ])
     
     # Prepare data summary for AI analysis
     data_summary = f"""
@@ -240,87 +276,20 @@ Financial Goals:
 {chr(10).join([f"- {g.name}: Current: ₹{g.current:,.2f} / Target: ₹{g.target:,.2f} ({g.current/g.target*100:.1f}%)" for g in goals])}
 """
     
-    # Generate insights using AI
-    prompt = f"""As a financial advisor AI, analyze the following financial data and generate personalized insights. 
-Focus on:
-1. Progress towards financial goals
-2. Spending patterns and optimization opportunities
-3. Savings and investment recommendations
-4. Risk assessment and mitigation strategies
-5. Actionable next steps
-
-Financial Data:
-{data_summary}
-
-Generate 5-7 specific, actionable insights that are personalized to this user's situation and goals.
-You must respond with a valid JSON array of objects. Each object must have these exact fields:
-- title: string
-- description: string
-- category: string (one of: "spending", "recommendation")
-- priority: number (1-5, where 5 is highest)
-
-Example response format:
-[
-    {
-        "title": "Reduce Dining Out Expenses",
-        "description": "Consider reducing dining out expenses by 20% to save ₹2,000 monthly.",
-        "category": "spending",
-        "priority": 4
-    },
-    {
-        "title": "Increase Emergency Fund",
-        "description": "Aim to increase your emergency fund to cover 6 months of expenses.",
-        "category": "recommendation",
-        "priority": 5
-    }
-]
-
-Remember: Your response must be a valid JSON array containing only the specified fields."""
-
+    # Set up the output parser
+    parser = PydanticOutputParser(pydantic_object=FinancialInsights)
+    
+    # Create the chain
+    chain = prompt | llm | parser
+    
     try:
-        response = await client.chat.completions.create(
-            model="gpt-4-turbo",
-            messages=[{"role": "system", "content": prompt}],
-            temperature=0.2,
-            max_tokens=1000,
-            response_format={"type": "json_object"}
-        )
-
-        print(f"AI response: {response.choices[0].message.content}")
+        # Generate insights
+        result = chain.invoke({
+            "data_summary": data_summary,
+            "format_instructions": parser.get_format_instructions()
+        })
         
-        # Parse AI response into insights
-        insights_text = response.choices[0].message.content
-        try:
-            insights_data = json.loads(insights_text)
-            if not isinstance(insights_data, list):
-                insights_data = [insights_data]  # Handle single object response
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON response from AI: {insights_text}")
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to generate valid insights format"
-            )
-        
-        # Validate insight structure
-        required_fields = {'title', 'description', 'category', 'priority'}
-        valid_categories = {'spending', 'saving', 'investment', 'goal', 'risk', 'recommendation'}
-        
-        for insight in insights_data:
-            if not all(field in insight for field in required_fields):
-                raise HTTPException(
-                    status_code=500,
-                    detail="Invalid insight structure: missing required fields"
-                )
-            if insight['category'] not in valid_categories:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Invalid category: {insight['category']}"
-                )
-            if not isinstance(insight['priority'], int) or not 1 <= insight['priority'] <= 5:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Invalid priority: {insight['priority']}"
-                )
+        print(f"Generated {len(result.insights)} insights")
         
         # Mark existing insights as inactive
         await db.execute(
@@ -332,14 +301,14 @@ Remember: Your response must be a valid JSON array containing only the specified
         db_insights = [
             AIInsight(
                 user_id=user_id,
-                title=insight['title'],
-                description=insight['description'],
-                category=insight['category'],
-                priority=insight['priority'],
+                title=insight.title,
+                description=insight.description,
+                category=insight.category,
+                priority=insight.priority,
                 is_active=True,
                 is_read=False
             )
-            for insight in insights_data
+            for insight in result.insights
         ]
         
         # Save new insights
