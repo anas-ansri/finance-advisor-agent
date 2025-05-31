@@ -1,10 +1,14 @@
 import logging
 from typing import List, Optional
 from uuid import UUID
+import json
+import pandas as pd
+from sqlalchemy import delete, text, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from openai import AsyncOpenAI
 from fastapi import HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.schemas.message import ChatMessage
@@ -195,41 +199,159 @@ async def generate_financial_insights(
     """Generates AI-powered financial insights for the user."""
     print(f"Generating insights for user: {user_id}")
 
-    # Fetch all transactions for the user
-    transactions: List[BankTransaction] = await get_all_transactions(db, user_id)
+    # Fetch all transactions for the user with category eagerly loaded
+    stmt = select(BankTransaction).options(
+        joinedload(BankTransaction.category)
+    ).where(BankTransaction.user_id == user_id)
+    result = await db.execute(stmt)
+    transactions = result.scalars().all()
     print(f"Fetched {len(transactions)} transactions for insight generation.")
 
-    # TODO: Process transactions and generate insights using an AI model
-    # This is where you would integrate your AI model logic.
-    # Example structure for processing:
-    # - Analyze spending patterns (e.g., identify unusual spending, subscriptions)
-    # - Identify savings opportunities
-    # - Generate financial recommendations (e.g., budget, debt repayment, retirement)
-    # - Format the AI response into AIInsightCreate objects
+    # Fetch user's financial goals
+    goals_result = await db.execute(
+        text("SELECT * FROM financial_goals WHERE user_id = :user_id"),
+        {"user_id": user_id},
+    )
+    goals = goals_result.fetchall()
+    
+    # Convert transactions to DataFrame for analysis
+    df = pd.DataFrame([{
+        'date': t.date,
+        'amount': t.amount,
+        'description': t.description,
+        'category': str(t.category.name) if t.category else 'Uncategorized'
+    } for t in transactions])
+    
+    # Initialize OpenAI client
+    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    
+    # Prepare data summary for AI analysis
+    data_summary = f"""
+Financial Data Summary:
+- Total Transactions: {len(df)}
+- Total Income: ₹{df[df['amount'] > 0]['amount'].sum():,.2f}
+- Total Expenses: ₹{abs(df[df['amount'] < 0]['amount'].sum()):,.2f}
+- Net Savings: ₹{(df[df['amount'] > 0]['amount'].sum() - abs(df[df['amount'] < 0]['amount'].sum())):,.2f}
 
-    # For now, keeping the simulated insights for demonstration
-    simulated_insights = [
-        AIInsightCreate(title="Unusual Spending", description="Your restaurant spending was 35% higher than your monthly average. Consider setting a dining budget.", category="spending"),
-        AIInsightCreate(title="Subscription Audit", description="You have 8 active subscriptions totaling $92.45/month. 3 haven't been used in 30 days.", category="spending"),
-        AIInsightCreate(title="Savings Opportunity", description="Switching to a different cell phone plan could save you $25/month based on your usage patterns.", category="spending"),
-        AIInsightCreate(title="Emergency Fund", description="Based on your monthly expenses, aim for $12,000 in your emergency fund. You're currently at 54%.", category="recommendation"),
-        AIInsightCreate(title="Debt Repayment", description="Paying an extra $200/month toward your highest interest credit card would save $340 in interest.", category="recommendation"),
-        AIInsightCreate(title="Retirement Savings", description="Increasing your 401(k) contribution by 2% would significantly improve your retirement outlook.", category="recommendation"),
-    ]
+Expense Categories:
+{df[df['amount'] < 0].groupby('category')['amount'].sum().abs().sort_values(ascending=False).to_string()}
 
-    # Clear existing insights for simplicity in this example (in a real app, you'd update/add)
-    # await db.execute(delete(AIInsight).where(AIInsight.user_id == user_id))
+Financial Goals:
+{chr(10).join([f"- {g.name}: Current: ₹{g.current:,.2f} / Target: ₹{g.target:,.2f} ({g.current/g.target*100:.1f}%)" for g in goals])}
+"""
+    
+    # Generate insights using AI
+    prompt = f"""As a financial advisor AI, analyze the following financial data and generate personalized insights. 
+Focus on:
+1. Progress towards financial goals
+2. Spending patterns and optimization opportunities
+3. Savings and investment recommendations
+4. Risk assessment and mitigation strategies
+5. Actionable next steps
 
-    # Save generated (or simulated) insights to the database
-    db_insights = [
-        AIInsight(user_id=user_id, title=insight.title, description=insight.description, category=insight.category)
-        for insight in simulated_insights
-    ]
+Financial Data:
+{data_summary}
 
-    # Clear existing insights before adding new ones (optional, depends on desired behavior)
-    # await db.execute(delete(AIInsight).where(AIInsight.user_id == user_id))
+Generate 5-7 specific, actionable insights that are personalized to this user's situation and goals.
+You must respond with a valid JSON array of objects. Each object must have these exact fields:
+- title: string
+- description: string
+- category: string (one of: "spending", "recommendation")
+- priority: number (1-5, where 5 is highest)
 
-    db.add_all(db_insights)
-    await db.commit()
+Example response format:
+[
+    {
+        "title": "Reduce Dining Out Expenses",
+        "description": "Consider reducing dining out expenses by 20% to save ₹2,000 monthly.",
+        "category": "spending",
+        "priority": 4
+    },
+    {
+        "title": "Increase Emergency Fund",
+        "description": "Aim to increase your emergency fund to cover 6 months of expenses.",
+        "category": "recommendation",
+        "priority": 5
+    }
+]
 
-    print(f"Saved {len(db_insights)} insights for user {user_id}.")
+Remember: Your response must be a valid JSON array containing only the specified fields."""
+
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4-turbo",
+            messages=[{"role": "system", "content": prompt}],
+            temperature=0.2,
+            max_tokens=1000,
+            response_format={"type": "json_object"}
+        )
+
+        print(f"AI response: {response.choices[0].message.content}")
+        
+        # Parse AI response into insights
+        insights_text = response.choices[0].message.content
+        try:
+            insights_data = json.loads(insights_text)
+            if not isinstance(insights_data, list):
+                insights_data = [insights_data]  # Handle single object response
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON response from AI: {insights_text}")
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to generate valid insights format"
+            )
+        
+        # Validate insight structure
+        required_fields = {'title', 'description', 'category', 'priority'}
+        valid_categories = {'spending', 'saving', 'investment', 'goal', 'risk', 'recommendation'}
+        
+        for insight in insights_data:
+            if not all(field in insight for field in required_fields):
+                raise HTTPException(
+                    status_code=500,
+                    detail="Invalid insight structure: missing required fields"
+                )
+            if insight['category'] not in valid_categories:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Invalid category: {insight['category']}"
+                )
+            if not isinstance(insight['priority'], int) or not 1 <= insight['priority'] <= 5:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Invalid priority: {insight['priority']}"
+                )
+        
+        # Mark existing insights as inactive
+        await db.execute(
+            text("UPDATE ai_insights SET is_active = false WHERE user_id = :user_id"),
+            {"user_id": user_id}
+        )
+        
+        # Convert to AIInsight objects
+        db_insights = [
+            AIInsight(
+                user_id=user_id,
+                title=insight['title'],
+                description=insight['description'],
+                category=insight['category'],
+                priority=insight['priority'],
+                is_active=True,
+                is_read=False
+            )
+            for insight in insights_data
+        ]
+        
+        # Save new insights
+        db.add_all(db_insights)
+        await db.commit()
+        
+        print(f"Generated and saved {len(db_insights)} personalized insights for user {user_id}")
+        
+    except Exception as e:
+        logger.error(f"Error generating insights: {str(e)}")
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate financial insights: {str(e)}"
+        )

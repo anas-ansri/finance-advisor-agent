@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, String, func, ForeignKey
+from sqlalchemy import Boolean, Column, DateTime, String, func, ForeignKey, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
@@ -20,6 +20,8 @@ class AIInsight(Base):
     description = Column(String, nullable=False)
     category = Column(String, nullable=False)
     is_read = Column(Boolean, server_default="false")
+    is_active = Column(Boolean, server_default="true", nullable=False)
+    priority = Column(Integer, nullable=True)
     
     # Relationships
     user = relationship("User", back_populates="insights") 
