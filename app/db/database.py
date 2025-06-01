@@ -2,7 +2,7 @@ import logging
 from typing import AsyncGenerator
 import os
 import ssl
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse
 from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -13,28 +13,6 @@ from sqlalchemy.pool import AsyncAdaptedQueuePool
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
-
-def get_database_url():
-    """
-    Get the appropriate database URL based on the environment.
-    """
-    if os.getenv("ENVIRONMENT") == "production" and "supabase" in settings.DATABASE_URL:
-        # Parse the original URL
-        parsed = urlparse(settings.DATABASE_URL)
-        # Replace the hostname with the pooler hostname
-        new_hostname = parsed.hostname.replace("db.", "db-pooler.")
-        # Create new URL with pooler hostname
-        new_url = urlunparse((
-            parsed.scheme,
-            new_hostname,
-            parsed.path,
-            parsed.params,
-            parsed.query,
-            parsed.fragment
-        ))
-        logger.info(f"Using connection pooler URL: {new_url}")
-        return new_url
-    return settings.DATABASE_URL
 
 def get_ssl_args():
     """
@@ -49,33 +27,6 @@ def get_ssl_args():
             ssl_context = ssl.create_default_context()
             ssl_context.check_hostname = False
             ssl_context.verify_mode = ssl.CERT_NONE
-            
-            # Try to find the SSL certificate in common locations
-            cert_paths = [
-                Path("/app/cert.crt"),  # Heroku path
-                Path("cert.crt"),       # Local path
-                Path("../cert.crt"),    # Parent directory
-                Path("../../cert.crt"), # Two levels up
-                Path("/app/cert.pem"),  # Alternative Heroku path
-                Path("cert.pem"),       # Alternative local path
-            ]
-            
-            cert_path = None
-            for path in cert_paths:
-                if path.exists():
-                    cert_path = path
-                    break
-            
-            if cert_path:
-                logger.info(f"Found SSL certificate at: {cert_path}")
-                try:
-                    ssl_context.load_verify_locations(str(cert_path))
-                except Exception as e:
-                    logger.warning(f"Failed to load SSL certificate: {str(e)}")
-            
-            if os.getenv("ENVIRONMENT") == "production":
-                ssl_context.check_hostname = True
-                ssl_context.verify_mode = ssl.CERT_REQUIRED
             
             return {
                 "ssl": ssl_context,
@@ -109,7 +60,7 @@ def get_ssl_args():
 
 # Create async engine for main database
 engine = create_async_engine(
-    get_database_url(),
+    settings.DATABASE_URL,
     echo=False,  # Disable SQL echo in production
     poolclass=AsyncAdaptedQueuePool,
     pool_size=5,  # Maximum number of connections to keep
