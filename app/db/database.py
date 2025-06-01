@@ -2,6 +2,8 @@ import logging
 from typing import AsyncGenerator
 import os
 import ssl
+from urllib.parse import urlparse
+from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -16,16 +18,67 @@ def get_ssl_args():
     """
     Get SSL arguments based on the database URL.
     """
-    if "supabase" in settings.DATABASE_URL:
-        # For Supabase, we need to handle self-signed certificates
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-        return {"ssl": ssl_context}
-    elif "heroku" in settings.DATABASE_URL:
-        return {"ssl": True}
-    else:
-        return {"ssl": False}
+    try:
+        parsed_url = urlparse(settings.DATABASE_URL)
+        logger.info(f"Database host: {parsed_url.hostname}")
+        
+        if "supabase" in settings.DATABASE_URL:
+            # For Supabase, use the SSL certificate
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = True
+            ssl_context.verify_mode = ssl.CERT_REQUIRED
+            
+            # Try to find the SSL certificate in common locations
+            cert_paths = [
+                Path("/app/cert.crt"),  # Heroku path
+                Path("cert.crt"),       # Local path
+                Path("../cert.crt"),    # Parent directory
+                Path("../../cert.crt"), # Two levels up
+                Path("/app/cert.pem"),  # Alternative Heroku path
+                Path("cert.pem"),       # Alternative local path
+            ]
+            
+            cert_path = None
+            for path in cert_paths:
+                if path.exists():
+                    cert_path = path
+                    break
+            
+            if cert_path:
+                logger.info(f"Using SSL certificate from: {cert_path}")
+                ssl_context.load_verify_locations(str(cert_path))
+            else:
+                logger.warning("SSL certificate not found, falling back to default SSL context")
+            
+            return {
+                "ssl": ssl_context,
+                "server_settings": {
+                    "application_name": "finance_advisor_agent",
+                    "statement_timeout": "60000",  # 60 seconds
+                    "idle_in_transaction_session_timeout": "60000"  # 60 seconds
+                }
+            }
+        elif "heroku" in settings.DATABASE_URL:
+            return {
+                "ssl": True,
+                "server_settings": {
+                    "application_name": "finance_advisor_agent",
+                    "statement_timeout": "60000",
+                    "idle_in_transaction_session_timeout": "60000"
+                }
+            }
+        else:
+            return {
+                "ssl": False,
+                "server_settings": {
+                    "application_name": "finance_advisor_agent",
+                    "statement_timeout": "60000",
+                    "idle_in_transaction_session_timeout": "60000"
+                }
+            }
+    except Exception as e:
+        logger.error(f"Error parsing database URL: {str(e)}")
+        raise
 
 # Create async engine for main database
 engine = create_async_engine(
@@ -36,7 +89,12 @@ engine = create_async_engine(
     max_overflow=10,  # Maximum number of connections that can be created beyond pool_size
     pool_timeout=30,  # Seconds to wait before giving up on getting a connection from the pool
     pool_recycle=1800,  # Recycle connections after 30 minutes
-    connect_args=get_ssl_args()
+    connect_args=get_ssl_args(),
+    pool_pre_ping=True,  # Enable connection health checks
+    # Disable statement caching for PgBouncer compatibility
+    execution_options={
+        "compiled_cache": None
+    }
 )
 
 # Create async engine for test database
@@ -48,7 +106,11 @@ test_engine = create_async_engine(
     max_overflow=10,
     pool_timeout=30,
     pool_recycle=1800,
-    connect_args={"ssl": False}  # Disable SSL for local development
+    connect_args={"ssl": False},  # Disable SSL for local development
+    pool_pre_ping=True,
+    execution_options={
+        "compiled_cache": None
+    }
 )
 
 # Create async session factories
