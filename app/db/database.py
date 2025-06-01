@@ -23,10 +23,10 @@ def get_ssl_args():
         logger.info(f"Database host: {parsed_url.hostname}")
         
         if "supabase" in settings.DATABASE_URL:
-            # For Supabase, use the SSL certificate
+            # For Supabase, use a more permissive SSL setup
             ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = True
-            ssl_context.verify_mode = ssl.CERT_REQUIRED
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
             
             # Try to find the SSL certificate in common locations
             cert_paths = [
@@ -45,10 +45,15 @@ def get_ssl_args():
                     break
             
             if cert_path:
-                logger.info(f"Using SSL certificate from: {cert_path}")
-                ssl_context.load_verify_locations(str(cert_path))
-            else:
-                logger.warning("SSL certificate not found, falling back to default SSL context")
+                logger.info(f"Found SSL certificate at: {cert_path}")
+                try:
+                    ssl_context.load_verify_locations(str(cert_path))
+                except Exception as e:
+                    logger.warning(f"Failed to load SSL certificate: {str(e)}")
+            
+            if os.getenv("ENVIRONMENT") == "production":
+                ssl_context.check_hostname = True
+                ssl_context.verify_mode = ssl.CERT_REQUIRED
             
             return {
                 "ssl": ssl_context,
