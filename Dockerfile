@@ -17,11 +17,11 @@ COPY . .
 # Create startup script
 RUN echo '#!/bin/sh\n\
 alembic upgrade head\n\
-uvicorn main:app --host 0.0.0.0 --port 8000\n\
+uvicorn main:app --host 0.0.0.0 --port ${PORT:-5000}\n\
 ' > /app/start.sh && chmod +x /app/start.sh
 
 # Expose port
-EXPOSE 8000
+EXPOSE ${PORT:-5000}
 
 # Command to run the application
 CMD ["/app/start.sh"]

@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     VERSION: str = "0.1.0"
     DEBUG: bool = False
     HOST: str = "0.0.0.0"
-    PORT: int = 8000
+    PORT: int = int(os.getenv("PORT", "5000"))
     
     # Documentation settings
     DOCS_URL: str = "/docs"
