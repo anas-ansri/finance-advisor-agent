@@ -1,5 +1,6 @@
 import logging
 from typing import AsyncGenerator
+import os
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -10,14 +11,23 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+def get_ssl_args():
+    """
+    Get SSL arguments based on the database URL.
+    """
+    if "supabase" in settings.DATABASE_URL:
+        return {"ssl": True}
+    elif "heroku" in settings.DATABASE_URL:
+        return {"ssl": True}
+    else:
+        return {"ssl": False}
+
 # Create async engine for main database
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,  # Disable SQL echo in production
     poolclass=NullPool,
-    connect_args={
-        "ssl": True  # Enable SSL for Heroku PostgreSQL
-    }
+    connect_args=get_ssl_args()
 )
 
 # Create async engine for test database
@@ -25,9 +35,7 @@ test_engine = create_async_engine(
     settings.TEST_DATABASE_URL,
     echo=True,  # Enable SQL echo in test environment
     poolclass=NullPool,
-    connect_args={
-        "ssl": False  # Disable SSL for local development
-    }
+    connect_args={"ssl": False}  # Disable SSL for local development
 )
 
 # Create async session factories
@@ -55,21 +63,31 @@ async def init_db():
     """
     Initialize database with required extensions.
     """
-    async with engine.begin() as conn:
-        # Enable UUID extension
-        await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
+    try:
+        async with engine.begin() as conn:
+            # Enable UUID extension
+            await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
+            logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {str(e)}")
+        raise
 
 
 async def init_test_db():
     """
     Initialize test database with required extensions.
     """
-    async with test_engine.begin() as conn:
-        # Enable UUID extension
-        await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
-        # Drop all tables and recreate them
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
+    try:
+        async with test_engine.begin() as conn:
+            # Enable UUID extension
+            await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
+            # Drop all tables and recreate them
+            await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(Base.metadata.create_all)
+            logger.info("Test database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize test database: {str(e)}")
+        raise
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
