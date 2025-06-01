@@ -1,6 +1,7 @@
 import logging
 from typing import AsyncGenerator
 import os
+import ssl
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -16,7 +17,11 @@ def get_ssl_args():
     Get SSL arguments based on the database URL.
     """
     if "supabase" in settings.DATABASE_URL:
-        return {"ssl": True}
+        # For Supabase, we need to handle self-signed certificates
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        return {"ssl": ssl_context}
     elif "heroku" in settings.DATABASE_URL:
         return {"ssl": True}
     else:
