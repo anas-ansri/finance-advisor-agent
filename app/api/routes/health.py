@@ -21,12 +21,19 @@ async def health_check(db: AsyncSession = Depends(get_db)):
     try:
         # Execute a simple query to check database connection
         result = await db.execute(text("SELECT 1"))
-        await result.fetchone()
-        db_status = "connected"
-        db_details = {
-            "status": "connected",
-            "url": settings.DATABASE_URL.split("@")[1] if "@" in settings.DATABASE_URL else "unknown"
-        }
+        row = result.scalar_one()
+        if row == 1:
+            db_status = "connected"
+            db_details = {
+                "status": "connected",
+                "url": settings.DATABASE_URL.split("@")[1] if "@" in settings.DATABASE_URL else "unknown"
+            }
+        else:
+            db_status = "disconnected"
+            db_details = {
+                "status": "disconnected",
+                "error": "Unexpected database response"
+            }
     except Exception as e:
         logger.error(f"Database connection error: {str(e)}")
         db_status = "disconnected"
