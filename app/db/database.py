@@ -6,7 +6,7 @@ import ssl
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy import text
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import AsyncAdaptedQueuePool
 
 from app.core.config import settings
 
@@ -21,11 +21,7 @@ def get_ssl_args():
         ssl_context = ssl.create_default_context()
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
-        return {
-            "ssl": ssl_context,
-            "statement_cache_size": 0,  # Disable statement cache for PgBouncer
-            "prepared_statement_cache_size": 0  # Disable prepared statement cache
-        }
+        return {"ssl": ssl_context}
     elif "heroku" in settings.DATABASE_URL:
         return {"ssl": True}
     else:
@@ -35,19 +31,23 @@ def get_ssl_args():
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,  # Disable SQL echo in production
-    poolclass=NullPool,
-    connect_args=get_ssl_args(),
-    # Disable statement caching at the engine level
-    execution_options={
-        "compiled_cache": None
-    }
+    poolclass=AsyncAdaptedQueuePool,
+    pool_size=5,  # Maximum number of connections to keep
+    max_overflow=10,  # Maximum number of connections that can be created beyond pool_size
+    pool_timeout=30,  # Seconds to wait before giving up on getting a connection from the pool
+    pool_recycle=1800,  # Recycle connections after 30 minutes
+    connect_args=get_ssl_args()
 )
 
 # Create async engine for test database
 test_engine = create_async_engine(
     settings.TEST_DATABASE_URL,
     echo=True,  # Enable SQL echo in test environment
-    poolclass=NullPool,
+    poolclass=AsyncAdaptedQueuePool,
+    pool_size=5,
+    max_overflow=10,
+    pool_timeout=30,
+    pool_recycle=1800,
     connect_args={"ssl": False}  # Disable SSL for local development
 )
 
