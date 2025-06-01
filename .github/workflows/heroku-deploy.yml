@@ -37,22 +37,24 @@ jobs:
       with:
         fetch-depth: 0
     
-    - name: Deploy to Heroku
-      uses: akhileshns/heroku-deploy@v3.12.14
-      with:
-        heroku_api_key: ${{secrets.HEROKU_API_KEY}}
-        heroku_app_name: ${{secrets.HEROKU_APP_NAME}}
-        heroku_email: ${{secrets.HEROKU_EMAIL}}
+    - name: Setup Heroku CLI
+      run: |
+        curl https://cli-assets.heroku.com/install-ubuntu.sh | sh
+        export PATH="$PATH:/usr/local/bin"
         
-    # Alternative deployment method using Heroku CLI
-    # - name: Deploy using Heroku CLI
-    #   run: |
-    #     curl https://cli-assets.heroku.com/install.sh | sh
-    #     echo "machine api.heroku.com login ${{secrets.HEROKU_EMAIL}} password ${{secrets.HEROKU_API_KEY}}" > ~/.netrc
-    #     echo "machine git.heroku.com login ${{secrets.HEROKU_EMAIL}} password ${{secrets.HEROKU_API_KEY}}" >> ~/.netrc
-    #     heroku git:remote -a ${{secrets.HEROKU_APP_NAME}}
-    #     git push heroku main
+    - name: Login to Heroku
+      run: |
+        echo "machine api.heroku.com login ${{secrets.HEROKU_EMAIL}} password ${{secrets.HEROKU_API_KEY}}" > ~/.netrc
+        echo "machine git.heroku.com login ${{secrets.HEROKU_EMAIL}} password ${{secrets.HEROKU_API_KEY}}" >> ~/.netrc
+        chmod 600 ~/.netrc
+        
+    - name: Deploy to Heroku
+      run: |
+        export PATH="$PATH:/usr/local/bin"
+        heroku git:remote -a ${{secrets.HEROKU_APP_NAME}}
+        git push heroku main
 
+        
   notify:
     needs: [test, deploy]
     runs-on: ubuntu-latest
