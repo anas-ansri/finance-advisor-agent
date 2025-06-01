@@ -27,7 +27,10 @@ class Settings(BaseSettings):
     # CORS settings
     CORS_ORIGINS: List[str] = [
         "http://localhost:3000",
-        "https://savvy-finance.vercel.app"
+        "https://savvy-finance.vercel.app",
+        "https://*.herokuapp.com",  # Allow all Heroku subdomains
+        "http://localhost:5000",    # Allow local Swagger UI
+        "http://localhost:8000",    # Allow alternative local port
     ]
     
     @validator("CORS_ORIGINS", pre=True)

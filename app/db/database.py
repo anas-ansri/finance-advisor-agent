@@ -4,6 +4,7 @@ from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy import text
+from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
 
@@ -11,31 +12,39 @@ logger = logging.getLogger(__name__)
 
 # Create async engine for main database
 engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=settings.DEBUG,
-    future=True,
+    settings.DATABASE_URL.replace('postgresql+asyncpg', 'postgresql+psycopg2'),
+    echo=settings.DB_ECHO,
+    poolclass=NullPool,
     connect_args={
-        "ssl": True
+        "sslmode": "require"
     }
 )
 
 # Create async engine for test database
 test_engine = create_async_engine(
-    settings.TEST_DATABASE_URL,
-    echo=settings.DEBUG,
-    future=True,
+    settings.TEST_DATABASE_URL.replace('postgresql+asyncpg', 'postgresql+psycopg2'),
+    echo=settings.DB_ECHO,
+    poolclass=NullPool,
     connect_args={
-        "ssl": True
+        "sslmode": "require"
     }
 )
 
 # Create async session factories
 async_session_factory = sessionmaker(
-    engine, class_=AsyncSession, expire_on_commit=False
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False,
 )
 
 test_async_session_factory = sessionmaker(
-    test_engine, class_=AsyncSession, expire_on_commit=False
+    test_engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False,
 )
 
 # Create declarative base for models

@@ -1,6 +1,7 @@
 import logging
 import time
 from contextlib import asynccontextmanager
+import os
 
 import uvicorn
 from fastapi import FastAPI, Request, status
@@ -95,10 +96,15 @@ async def health_check():
 
 
 if __name__ == "__main__":
-    uvicorn.run(
-        "main:app",
-        host=settings.HOST,
-        port=settings.PORT,
-        reload=settings.DEBUG,
-        log_level=settings.LOG_LEVEL.lower(),
-    )
+    try:
+        port = int(os.environ.get("PORT", settings.PORT))
+        uvicorn.run(
+            "main:app",
+            host=settings.HOST,
+            port=port,
+            reload=settings.DEBUG,
+            log_level=settings.LOG_LEVEL.lower(),
+        )
+    except Exception as e:
+        logger.error(f"Failed to start application: {str(e)}")
+        raise
