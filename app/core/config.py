@@ -25,7 +25,10 @@ class Settings(BaseSettings):
     REDOC_URL: str = "/redoc"
     
     # CORS settings
-    CORS_ORIGINS: List[str] = ["http://localhost:3000"]
+    CORS_ORIGINS: List[str] = [
+        "http://localhost:3000",
+        "https://savvy-finance.vercel.app"
+    ]
     
     @validator("CORS_ORIGINS", pre=True)
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
