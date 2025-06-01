@@ -16,7 +16,7 @@ engine = create_async_engine(
     echo=False,  # Disable SQL echo in production
     poolclass=NullPool,
     connect_args={
-        "sslmode": "require"
+        "ssl": True  # Enable SSL for Heroku PostgreSQL
     }
 )
 
@@ -26,7 +26,7 @@ test_engine = create_async_engine(
     echo=True,  # Enable SQL echo in test environment
     poolclass=NullPool,
     connect_args={
-        "sslmode": "require"
+        "ssl": False  # Disable SSL for local development
     }
 )
 
