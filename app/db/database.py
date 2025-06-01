@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 
 # Create async engine for main database
 engine = create_async_engine(
-    settings.DATABASE_URL.replace('postgresql+asyncpg', 'postgresql+psycopg2'),
-    echo=settings.DB_ECHO,
+    settings.DATABASE_URL,
+    echo=False,  # Disable SQL echo in production
     poolclass=NullPool,
     connect_args={
         "sslmode": "require"
@@ -22,8 +22,8 @@ engine = create_async_engine(
 
 # Create async engine for test database
 test_engine = create_async_engine(
-    settings.TEST_DATABASE_URL.replace('postgresql+asyncpg', 'postgresql+psycopg2'),
-    echo=settings.DB_ECHO,
+    settings.TEST_DATABASE_URL,
+    echo=True,  # Enable SQL echo in test environment
     poolclass=NullPool,
     connect_args={
         "sslmode": "require"
