@@ -21,7 +21,11 @@ def get_ssl_args():
         ssl_context = ssl.create_default_context()
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
-        return {"ssl": ssl_context}
+        return {
+            "ssl": ssl_context,
+            "statement_cache_size": 0,  # Disable statement cache for PgBouncer
+            "prepared_statement_cache_size": 0  # Disable prepared statement cache
+        }
     elif "heroku" in settings.DATABASE_URL:
         return {"ssl": True}
     else:
@@ -32,7 +36,11 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,  # Disable SQL echo in production
     poolclass=NullPool,
-    connect_args=get_ssl_args()
+    connect_args=get_ssl_args(),
+    # Disable statement caching at the engine level
+    execution_options={
+        "compiled_cache": None
+    }
 )
 
 # Create async engine for test database
