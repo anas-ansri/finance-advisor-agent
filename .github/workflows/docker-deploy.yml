@@ -87,7 +87,7 @@ jobs:
         heroku_app_name: ${{ secrets.HEROKU_APP_NAME }}
         heroku_email: ${{ secrets.HEROKU_EMAIL }}
         appdir: "."
-        procfile: "web: docker run -p $PORT:8000 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+        procfile: "web: docker run -p $PORT:8000 -e DATABASE_URL=$DATABASE_URL ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
         healthcheck: "https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com/health"
         checkstring: "ok"
         delay: 10
