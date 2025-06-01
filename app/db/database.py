@@ -2,7 +2,7 @@ import logging
 from typing import AsyncGenerator
 import os
 import ssl
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -13,6 +13,28 @@ from sqlalchemy.pool import AsyncAdaptedQueuePool
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+def get_database_url():
+    """
+    Get the appropriate database URL based on the environment.
+    """
+    if os.getenv("ENVIRONMENT") == "production" and "supabase" in settings.DATABASE_URL:
+        # Parse the original URL
+        parsed = urlparse(settings.DATABASE_URL)
+        # Replace the hostname with the pooler hostname
+        new_hostname = parsed.hostname.replace("db.", "db-pooler.")
+        # Create new URL with pooler hostname
+        new_url = urlunparse((
+            parsed.scheme,
+            new_hostname,
+            parsed.path,
+            parsed.params,
+            parsed.query,
+            parsed.fragment
+        ))
+        logger.info(f"Using connection pooler URL: {new_url}")
+        return new_url
+    return settings.DATABASE_URL
 
 def get_ssl_args():
     """
@@ -87,7 +109,7 @@ def get_ssl_args():
 
 # Create async engine for main database
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    get_database_url(),
     echo=False,  # Disable SQL echo in production
     poolclass=AsyncAdaptedQueuePool,
     pool_size=5,  # Maximum number of connections to keep
