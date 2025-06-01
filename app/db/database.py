@@ -14,6 +14,9 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
     future=True,
+    connect_args={
+        "ssl": "require"
+    }
 )
 
 # Create async engine for test database
@@ -21,6 +24,9 @@ test_engine = create_async_engine(
     settings.TEST_DATABASE_URL,
     echo=settings.DEBUG,
     future=True,
+    connect_args={
+        "ssl": "require"
+    }
 )
 
 # Create async session factories
