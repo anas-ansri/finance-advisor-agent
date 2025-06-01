@@ -23,22 +23,19 @@ def get_ssl_args():
         logger.info(f"Database host: {parsed_url.hostname}")
         
         if "supabase" in settings.DATABASE_URL:
-            # For Supabase, use a more permissive SSL setup
-            ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = False
-            ssl_context.verify_mode = ssl.CERT_NONE
-            
+            # For Supabase, use SSL with proper configuration
             return {
-                "ssl": ssl_context,
+                "ssl": "require",
                 "server_settings": {
                     "application_name": "finance_advisor_agent",
                     "statement_timeout": "60000",  # 60 seconds
                     "idle_in_transaction_session_timeout": "60000"  # 60 seconds
                 }
             }
-        elif "heroku" in settings.DATABASE_URL:
+        elif "heroku" in settings.DATABASE_URL or os.getenv("DYNO"):
+            # Running on Heroku - use SSL
             return {
-                "ssl": True,
+                "ssl": "require",
                 "server_settings": {
                     "application_name": "finance_advisor_agent",
                     "statement_timeout": "60000",
@@ -46,6 +43,7 @@ def get_ssl_args():
                 }
             }
         else:
+            # Local development
             return {
                 "ssl": False,
                 "server_settings": {
@@ -63,8 +61,8 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,  # Disable SQL echo in production
     poolclass=AsyncAdaptedQueuePool,
-    pool_size=5,  # Maximum number of connections to keep
-    max_overflow=10,  # Maximum number of connections that can be created beyond pool_size
+    pool_size=3,  # Reduced for Heroku (limited connections)
+    max_overflow=5,  # Reduced for Heroku
     pool_timeout=30,  # Seconds to wait before giving up on getting a connection from the pool
     pool_recycle=1800,  # Recycle connections after 30 minutes
     connect_args=get_ssl_args(),
@@ -72,7 +70,9 @@ engine = create_async_engine(
     # Disable statement caching for PgBouncer compatibility
     execution_options={
         "compiled_cache": None
-    }
+    },
+    # Add connection retry logic
+    pool_reset_on_return='commit'
 )
 
 # Create async engine for test database
