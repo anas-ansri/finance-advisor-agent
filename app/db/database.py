@@ -11,21 +11,21 @@ logger = logging.getLogger(__name__)
 
 # Create async engine for main database
 engine = create_async_engine(
-    settings.DATABASE_URL.replace('postgresql+asyncpg', 'postgresql+psycopg2'),
+    settings.DATABASE_URL,
     echo=settings.DEBUG,
     future=True,
     connect_args={
-        "sslmode": "require"
+        "ssl": True
     }
 )
 
 # Create async engine for test database
 test_engine = create_async_engine(
-    settings.TEST_DATABASE_URL.replace('postgresql+asyncpg', 'postgresql+psycopg2'),
+    settings.TEST_DATABASE_URL,
     echo=settings.DEBUG,
     future=True,
     connect_args={
-        "sslmode": "require"
+        "ssl": True
     }
 )
 
