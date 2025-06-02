@@ -27,6 +27,7 @@ filelock==3.18.0
 frozenlist==1.6.0
 gotrue==2.12.0
 greenlet==3.2.2
+gunicorn==23.0.0
 h11==0.16.0
 h2==4.2.0
 hpack==4.1.0
@@ -72,6 +73,8 @@ pluggy==1.6.0
 postgrest==1.0.2
 propcache==0.3.1
 prov==2.0.1
+psycopg==3.2.9
+psycopg2==2.9.10
 puremagic==1.29
 pyasn1==0.6.1
 pydantic==2.11.5
