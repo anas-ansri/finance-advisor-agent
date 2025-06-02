@@ -23,14 +23,15 @@ def get_ssl_args():
         logger.info(f"Database host: {parsed_url.hostname}")
         
         if "supabase" in settings.DATABASE_URL:
-            # For Supabase, use SSL with proper configuration
+            # For Supabase, use SSL with proper configuration and disable prepared statements
             return {
                 "ssl": "require",
                 "server_settings": {
                     "application_name": "finance_advisor_agent",
                     "statement_timeout": "60000",  # 60 seconds
                     "idle_in_transaction_session_timeout": "60000"  # 60 seconds
-                }
+                },
+                "statement_cache_size": 0  # Disable prepared statements for PgBouncer compatibility
             }
         elif "heroku" in settings.DATABASE_URL or os.getenv("DYNO"):
             # Running on Heroku - use SSL
