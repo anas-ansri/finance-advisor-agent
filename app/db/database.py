@@ -76,10 +76,6 @@ engine = create_async_engine(
         "compiled_cache": None,
         "isolation_level": "READ COMMITTED"  # Default isolation level for session mode
     },
-    connect_args={
-        "ssl": False,  # Disable SSL for local development
-        "statement_cache_size": 0,  # Disable prepared statements consistently
-    },
     # Add connection retry logic
     pool_reset_on_return='commit'
 )
