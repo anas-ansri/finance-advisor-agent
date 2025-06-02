@@ -23,15 +23,17 @@ def get_ssl_args():
         logger.info(f"Database host: {parsed_url.hostname}")
         
         if "supabase" in settings.DATABASE_URL:
-            # For Supabase, use SSL with proper configuration and disable prepared statements
+            # For Supabase with PgBouncer in session mode
             return {
                 "ssl": "require",
                 "server_settings": {
                     "application_name": "finance_advisor_agent",
                     "statement_timeout": "60000",  # 60 seconds
-                    "idle_in_transaction_session_timeout": "60000"  # 60 seconds
+                    "idle_in_transaction_session_timeout": "60000",  # 60 seconds
+                    "client_min_messages": "warning"  # Reduce log noise
                 },
-                "statement_cache_size": 0  # Disable prepared statements for PgBouncer compatibility
+                "statement_cache_size": 0,  # Disable prepared statements
+                "prepared_statement_cache_size": 0  # Ensure no prepared statements
             }
         elif "heroku" in settings.DATABASE_URL or os.getenv("DYNO"):
             # Running on Heroku - use SSL
@@ -62,15 +64,16 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,  # Disable SQL echo in production
     poolclass=AsyncAdaptedQueuePool,
-    pool_size=3,  # Reduced for Heroku (limited connections)
-    max_overflow=5,  # Reduced for Heroku
+    pool_size=5,  # Adjusted for session mode
+    max_overflow=10,  # Adjusted for session mode
     pool_timeout=30,  # Seconds to wait before giving up on getting a connection from the pool
     pool_recycle=1800,  # Recycle connections after 30 minutes
     connect_args=get_ssl_args(),
     pool_pre_ping=True,  # Enable connection health checks
     # Disable statement caching for PgBouncer compatibility
     execution_options={
-        "compiled_cache": None
+        "compiled_cache": None,
+        "isolation_level": "READ COMMITTED"  # Default isolation level for session mode
     },
     # Add connection retry logic
     pool_reset_on_return='commit'
