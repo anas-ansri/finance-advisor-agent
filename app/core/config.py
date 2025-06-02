@@ -53,12 +53,30 @@ class Settings(BaseSettings):
         """
         Convert Heroku's postgres:// URL to postgresql+asyncpg:// format and add SSL configuration
         """
+        if not v:
+            return v
+            
+        # Handle Heroku's postgres:// URL format
         if v.startswith("postgres://"):
-            v = v.replace("postgres://", "postgresql+asyncpg://", 1)
-            if "?" not in v:
-                v += "?sslmode=require"
-            elif "sslmode=" not in v:
-                v += "&sslmode=require"
+            # Extract the components
+            parts = v.replace("postgres://", "").split("@")
+            if len(parts) == 2:
+                auth, host = parts
+                # Add SSL mode and other required parameters
+                if "?" not in host:
+                    host += "?sslmode=require"
+                elif "sslmode=" not in host:
+                    host += "&sslmode=require"
+                # Reconstruct the URL with asyncpg
+                v = f"postgresql+asyncpg://{auth}@{host}"
+            else:
+                # If the URL format is unexpected, just replace the prefix
+                v = v.replace("postgres://", "postgresql+asyncpg://", 1)
+                if "?" not in v:
+                    v += "?sslmode=require"
+                elif "sslmode=" not in v:
+                    v += "&sslmode=require"
+        
         return v
     
     # Logging settings

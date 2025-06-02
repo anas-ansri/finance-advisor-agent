@@ -1,5 +1,6 @@
 import logging
 from typing import AsyncGenerator
+import asyncio
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -19,6 +20,15 @@ engine = create_async_engine(
     max_overflow=10,  # Allow some overflow connections
     pool_timeout=30,  # Connection timeout
     pool_recycle=1800,  # Recycle connections every 30 minutes
+    connect_args={
+        "server_settings": {
+            "application_name": "finance_advisor",
+            "statement_timeout": "30000",  # 30 seconds
+            "lock_timeout": "30000",  # 30 seconds
+        },
+        "timeout": 30,  # Connection timeout in seconds
+        "command_timeout": 30,  # Command timeout in seconds
+    }
 )
 
 # Create async engine for test database
@@ -31,6 +41,15 @@ test_engine = create_async_engine(
     max_overflow=10,
     pool_timeout=30,
     pool_recycle=1800,
+    connect_args={
+        "server_settings": {
+            "application_name": "finance_advisor_test",
+            "statement_timeout": "30000",
+            "lock_timeout": "30000",
+        },
+        "timeout": 30,
+        "command_timeout": 30,
+    }
 )
 
 # Create async session factories
@@ -50,21 +69,49 @@ async def init_db():
     """
     Initialize database with required extensions.
     """
-    async with engine.begin() as conn:
-        # Enable UUID extension
-        await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
+    max_retries = 3
+    retry_delay = 5  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            async with engine.begin() as conn:
+                # Enable UUID extension
+                await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
+                logger.info("Database initialized successfully")
+                return
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"Database initialization attempt {attempt + 1} failed: {str(e)}. Retrying in {retry_delay} seconds...")
+                await asyncio.sleep(retry_delay)
+            else:
+                logger.error(f"Database initialization failed after {max_retries} attempts: {str(e)}")
+                raise
 
 
 async def init_test_db():
     """
     Initialize test database with required extensions.
     """
-    async with test_engine.begin() as conn:
-        # Enable UUID extension
-        await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
-        # Drop all tables and recreate them
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
+    max_retries = 3
+    retry_delay = 5  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            async with test_engine.begin() as conn:
+                # Enable UUID extension
+                await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
+                # Drop all tables and recreate them
+                await conn.run_sync(Base.metadata.drop_all)
+                await conn.run_sync(Base.metadata.create_all)
+                logger.info("Test database initialized successfully")
+                return
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"Test database initialization attempt {attempt + 1} failed: {str(e)}. Retrying in {retry_delay} seconds...")
+                await asyncio.sleep(retry_delay)
+            else:
+                logger.error(f"Test database initialization failed after {max_retries} attempts: {str(e)}")
+                raise
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
