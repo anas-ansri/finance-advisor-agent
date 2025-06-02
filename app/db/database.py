@@ -29,14 +29,7 @@ def get_ssl_args():
 
 # Create async engine for main database
 engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=False,  # Disable SQL echo in production
-    poolclass=AsyncAdaptedQueuePool,
-    pool_size=5,  # Maximum number of connections to keep
-    max_overflow=10,  # Maximum number of connections that can be created beyond pool_size
-    pool_timeout=30,  # Seconds to wait before giving up on getting a connection from the pool
-    pool_recycle=1800,  # Recycle connections after 30 minutes
-    connect_args=get_ssl_args()
+    settings.DATABASE_URL
 )
 
 # Create async engine for test database
