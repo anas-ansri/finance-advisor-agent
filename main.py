@@ -120,6 +120,9 @@ if __name__ == "__main__":
             timeout_keep_alive=30,  # Reduce keep-alive timeout
             limit_concurrency=100,  # Limit concurrent connections
             backlog=2048,  # Increase backlog
+            proxy_headers=True,  # Trust proxy headers
+            forwarded_allow_ips="*",  # Allow all forwarded IPs
+            server_header=False,  # Disable server header for security
         )
     except Exception as e:
         logger.error(f"Failed to start application: {str(e)}")

@@ -48,6 +48,19 @@ class Settings(BaseSettings):
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://anas@localhost:5432/finance_advisor")
     TEST_DATABASE_URL: str = os.getenv("TEST_DATABASE_URL", "postgresql+asyncpg://anas@localhost:5432/finance_advisor_test")
     
+    @validator("DATABASE_URL", pre=True)
+    def assemble_db_url(cls, v: str) -> str:
+        """
+        Convert Heroku's postgres:// URL to postgresql+asyncpg:// format and add SSL configuration
+        """
+        if v.startswith("postgres://"):
+            v = v.replace("postgres://", "postgresql+asyncpg://", 1)
+            if "?" not in v:
+                v += "?sslmode=require"
+            elif "sslmode=" not in v:
+                v += "&sslmode=require"
+        return v
+    
     # Logging settings
     LOG_LEVEL: str = "INFO"
     

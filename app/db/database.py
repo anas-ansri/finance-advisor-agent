@@ -14,6 +14,11 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
     future=True,
+    pool_pre_ping=True,  # Enable connection health checks
+    pool_size=5,  # Limit pool size
+    max_overflow=10,  # Allow some overflow connections
+    pool_timeout=30,  # Connection timeout
+    pool_recycle=1800,  # Recycle connections every 30 minutes
 )
 
 # Create async engine for test database
@@ -21,6 +26,11 @@ test_engine = create_async_engine(
     settings.TEST_DATABASE_URL,
     echo=settings.DEBUG,
     future=True,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
+    pool_timeout=30,
+    pool_recycle=1800,
 )
 
 # Create async session factories
