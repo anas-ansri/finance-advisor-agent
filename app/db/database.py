@@ -2,8 +2,6 @@ import logging
 from typing import AsyncGenerator
 import os
 import ssl
-from urllib.parse import urlparse
-from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -18,66 +16,27 @@ def get_ssl_args():
     """
     Get SSL arguments based on the database URL.
     """
-    try:
-        parsed_url = urlparse(settings.DATABASE_URL)
-        logger.info(f"Database host: {parsed_url.hostname}")
-        
-        if "supabase" in settings.DATABASE_URL:
-            # For Supabase with PgBouncer in session mode
-            return {
-                "ssl": "require",
-                "server_settings": {
-                    "application_name": "finance_advisor_agent",
-                    "statement_timeout": "60000",  # 60 seconds
-                    "idle_in_transaction_session_timeout": "60000",  # 60 seconds
-                    "client_min_messages": "warning"  # Reduce log noise
-                },
-                "statement_cache_size": 0,  # Disable prepared statements for pgbouncer compatibility
-            }
-        elif "heroku" in settings.DATABASE_URL or os.getenv("DYNO"):
-            # Running on Heroku - use SSL and disable statement cache
-            return {
-                "ssl": "require",
-                "server_settings": {
-                    "application_name": "finance_advisor_agent",
-                    "statement_timeout": "60000",
-                    "idle_in_transaction_session_timeout": "60000"
-                },
-                "statement_cache_size": 0,  # Disable prepared statements for pgbouncer compatibility
-            }
-        else:
-            # Local development - still disable statement cache in case pgbouncer is used
-            return {
-                "ssl": False,
-                "server_settings": {
-                    "application_name": "finance_advisor_agent",
-                    "statement_timeout": "60000",
-                    "idle_in_transaction_session_timeout": "60000"
-                },
-                "statement_cache_size": 0,  # Consistent behavior across environments
-            }
-    except Exception as e:
-        logger.error(f"Error parsing database URL: {str(e)}")
-        raise
+    if "supabase" in settings.DATABASE_URL:
+        # For Supabase, we need to handle self-signed certificates
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        return {"ssl": ssl_context}
+    elif "heroku" in settings.DATABASE_URL:
+        return {"ssl": True}
+    else:
+        return {"ssl": False}
 
 # Create async engine for main database
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,  # Disable SQL echo in production
     poolclass=AsyncAdaptedQueuePool,
-    pool_size=5,  # Adjusted for session mode
-    max_overflow=10,  # Adjusted for session mode
+    pool_size=5,  # Maximum number of connections to keep
+    max_overflow=10,  # Maximum number of connections that can be created beyond pool_size
     pool_timeout=30,  # Seconds to wait before giving up on getting a connection from the pool
     pool_recycle=1800,  # Recycle connections after 30 minutes
-    connect_args=get_ssl_args(),
-    pool_pre_ping=True,  # Enable connection health checks
-    # Disable statement caching for PgBouncer compatibility
-    execution_options={
-        "compiled_cache": None,
-        "isolation_level": "READ COMMITTED"  # Default isolation level for session mode
-    },
-    # Add connection retry logic
-    pool_reset_on_return='commit'
+    connect_args=get_ssl_args()
 )
 
 # Create async engine for test database
@@ -89,14 +48,7 @@ test_engine = create_async_engine(
     max_overflow=10,
     pool_timeout=30,
     pool_recycle=1800,
-    connect_args={
-        "ssl": False,  # Disable SSL for local development
-        "statement_cache_size": 0,  # Disable prepared statements consistently
-    },
-    pool_pre_ping=True,
-    execution_options={
-        "compiled_cache": None
-    }
+    connect_args={"ssl": False}  # Disable SSL for local development
 )
 
 # Create async session factories
