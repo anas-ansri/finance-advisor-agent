@@ -67,12 +67,14 @@ engine = create_async_engine(
     pool_recycle=1800,  # Recycle connections after 30 minutes
     connect_args=get_ssl_args(),
     pool_pre_ping=True,  # Enable connection health checks
-    # Disable statement caching for PgBouncer compatibility
+    # Disable statement caching and prepared statements for PgBouncer compatibility
     execution_options={
         "compiled_cache": None
     },
     # Add connection retry logic
-    pool_reset_on_return='commit'
+    pool_reset_on_return='commit',
+    # Disable prepared statements for PgBouncer compatibility
+    prepare_statement=False
 )
 
 # Create async engine for test database
