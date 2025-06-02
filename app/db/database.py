@@ -1,19 +1,31 @@
 import logging
 from typing import AsyncGenerator
 
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Database connection pool settings
+POOL_SIZE = 5
+MAX_OVERFLOW = 10
+POOL_TIMEOUT = 30
+POOL_RECYCLE = 1800
 
 # Create async engine for main database
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
     future=True,
+    pool_size=POOL_SIZE,
+    max_overflow=MAX_OVERFLOW,
+    pool_timeout=POOL_TIMEOUT,
+    pool_recycle=POOL_RECYCLE,
 )
 
 # Create async engine for test database
@@ -21,6 +33,10 @@ test_engine = create_async_engine(
     settings.TEST_DATABASE_URL,
     echo=settings.DEBUG,
     future=True,
+    pool_size=POOL_SIZE,
+    max_overflow=MAX_OVERFLOW,
+    pool_timeout=POOL_TIMEOUT,
+    pool_recycle=POOL_RECYCLE,
 )
 
 # Create async session factories
@@ -67,6 +83,13 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             yield session
             await session.commit()
             logger.debug("Database session committed")
+        except SQLAlchemyError as e:
+            await session.rollback()
+            logger.error(f"Database error occurred: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database service is currently unavailable. Please try again later."
+            )
         except Exception as e:
             await session.rollback()
             logger.exception("Database session rolled back due to exception")
