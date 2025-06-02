@@ -32,28 +32,29 @@ def get_ssl_args():
                     "idle_in_transaction_session_timeout": "60000",  # 60 seconds
                     "client_min_messages": "warning"  # Reduce log noise
                 },
-                "statement_cache_size": 0,  # Disable prepared statements
-                "prepared_statement_cache_size": 0  # Ensure no prepared statements
+                "statement_cache_size": 0,  # Disable prepared statements for pgbouncer compatibility
             }
         elif "heroku" in settings.DATABASE_URL or os.getenv("DYNO"):
-            # Running on Heroku - use SSL
+            # Running on Heroku - use SSL and disable statement cache
             return {
                 "ssl": "require",
                 "server_settings": {
                     "application_name": "finance_advisor_agent",
                     "statement_timeout": "60000",
                     "idle_in_transaction_session_timeout": "60000"
-                }
+                },
+                "statement_cache_size": 0,  # Disable prepared statements for pgbouncer compatibility
             }
         else:
-            # Local development
+            # Local development - still disable statement cache in case pgbouncer is used
             return {
                 "ssl": False,
                 "server_settings": {
                     "application_name": "finance_advisor_agent",
                     "statement_timeout": "60000",
                     "idle_in_transaction_session_timeout": "60000"
-                }
+                },
+                "statement_cache_size": 0,  # Consistent behavior across environments
             }
     except Exception as e:
         logger.error(f"Error parsing database URL: {str(e)}")
@@ -75,6 +76,10 @@ engine = create_async_engine(
         "compiled_cache": None,
         "isolation_level": "READ COMMITTED"  # Default isolation level for session mode
     },
+    connect_args={
+        "ssl": False,  # Disable SSL for local development
+        "statement_cache_size": 0,  # Disable prepared statements consistently
+    },
     # Add connection retry logic
     pool_reset_on_return='commit'
 )
@@ -88,7 +93,10 @@ test_engine = create_async_engine(
     max_overflow=10,
     pool_timeout=30,
     pool_recycle=1800,
-    connect_args={"ssl": False},  # Disable SSL for local development
+    connect_args={
+        "ssl": False,  # Disable SSL for local development
+        "statement_cache_size": 0,  # Disable prepared statements consistently
+    },
     pool_pre_ping=True,
     execution_options={
         "compiled_cache": None
