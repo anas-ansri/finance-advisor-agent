@@ -1,64 +1,35 @@
 import logging
 from typing import AsyncGenerator
-import os
-import ssl
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy import text
-from sqlalchemy.pool import AsyncAdaptedQueuePool
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-def get_ssl_args():
-    """
-    Get SSL arguments based on the database URL.
-    """
-    if "supabase" in settings.DATABASE_URL:
-        # For Supabase, we need to handle self-signed certificates
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-        return {"ssl": ssl_context}
-    elif "heroku" in settings.DATABASE_URL:
-        return {"ssl": True}
-    else:
-        return {"ssl": False}
-
 # Create async engine for main database
 engine = create_async_engine(
-    settings.DATABASE_URL
+    settings.DATABASE_URL,
+    echo=settings.DEBUG,
+    future=True,
 )
 
 # Create async engine for test database
 test_engine = create_async_engine(
     settings.TEST_DATABASE_URL,
-    echo=True,  # Enable SQL echo in test environment
-    poolclass=AsyncAdaptedQueuePool,
-    pool_size=5,
-    max_overflow=10,
-    pool_timeout=30,
-    pool_recycle=1800,
-    connect_args={"ssl": False}  # Disable SSL for local development
+    echo=settings.DEBUG,
+    future=True,
 )
 
 # Create async session factories
 async_session_factory = sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False,
+    engine, class_=AsyncSession, expire_on_commit=False
 )
 
 test_async_session_factory = sessionmaker(
-    test_engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False,
+    test_engine, class_=AsyncSession, expire_on_commit=False
 )
 
 # Create declarative base for models
@@ -69,31 +40,21 @@ async def init_db():
     """
     Initialize database with required extensions.
     """
-    try:
-        async with engine.begin() as conn:
-            # Enable UUID extension
-            await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
-            logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize database: {str(e)}")
-        raise
+    async with engine.begin() as conn:
+        # Enable UUID extension
+        await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
 
 
 async def init_test_db():
     """
     Initialize test database with required extensions.
     """
-    try:
-        async with test_engine.begin() as conn:
-            # Enable UUID extension
-            await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
-            # Drop all tables and recreate them
-            await conn.run_sync(Base.metadata.drop_all)
-            await conn.run_sync(Base.metadata.create_all)
-            logger.info("Test database initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize test database: {str(e)}")
-        raise
+    async with test_engine.begin() as conn:
+        # Enable UUID extension
+        await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
+        # Drop all tables and recreate them
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
