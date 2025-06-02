@@ -1,5 +1,6 @@
 import logging
 import time
+import asyncio
 from contextlib import asynccontextmanager
 import os
 
@@ -11,6 +12,7 @@ from fastapi.responses import JSONResponse
 from app.api.routes import api_router
 from app.core.config import settings
 from app.core.logging_config import configure_logging
+from app.db.database import init_db
 
 # Configure logging
 configure_logging()
@@ -25,6 +27,17 @@ async def lifespan(app: FastAPI):
     """
     # Startup events
     logger.info("Starting up Savvy APIs service")
+    try:
+        # Initialize database with timeout
+        async with asyncio.timeout(10):  # 10 second timeout for database initialization
+            await init_db()
+        logger.info("Database initialized successfully")
+    except asyncio.TimeoutError:
+        logger.error("Database initialization timed out")
+        raise
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {str(e)}")
+        raise
     yield
     # Shutdown events
     logger.info("Shutting down Savvy APIs service")
@@ -104,6 +117,9 @@ if __name__ == "__main__":
             port=port,
             reload=settings.DEBUG,
             log_level=settings.LOG_LEVEL.lower(),
+            timeout_keep_alive=30,  # Reduce keep-alive timeout
+            limit_concurrency=100,  # Limit concurrent connections
+            backlog=2048,  # Increase backlog
         )
     except Exception as e:
         logger.error(f"Failed to start application: {str(e)}")

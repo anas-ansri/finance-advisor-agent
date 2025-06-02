@@ -26,6 +26,11 @@ engine = create_async_engine(
     max_overflow=MAX_OVERFLOW,
     pool_timeout=POOL_TIMEOUT,
     pool_recycle=POOL_RECYCLE,
+    # Disable statement cache for PgBouncer compatibility
+    connect_args={
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+    }
 )
 
 # Create async engine for test database
@@ -37,6 +42,11 @@ test_engine = create_async_engine(
     max_overflow=MAX_OVERFLOW,
     pool_timeout=POOL_TIMEOUT,
     pool_recycle=POOL_RECYCLE,
+    # Disable statement cache for PgBouncer compatibility
+    connect_args={
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+    }
 )
 
 # Create async session factories
