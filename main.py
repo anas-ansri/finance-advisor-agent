@@ -17,6 +17,8 @@ async def root():
         conn = await asyncpg.connect(DATABASE_URL)
         version = await conn.fetchval("SELECT version();")
         await conn.close()
+        print(f"Connected to PostgreSQL version: {version}")
         return {"message": "✅ Connected", "postgres_version": version}
     except Exception as e:
+        print(f"Connection failed: {e}")
         return {"message": "❌ Connection failed", "error": str(e)}
