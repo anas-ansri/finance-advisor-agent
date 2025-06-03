@@ -15,12 +15,17 @@ logger = logging.getLogger(__name__)
 engine_config = {
     "echo": settings.DEBUG,
     "future": True,
-    # asyncpg connection pool settings
-    "pool_size": 5,
-    "max_overflow": 10,
-    "pool_timeout": 30,
-    "pool_recycle": 3600,  # 1 hour
-    "pool_pre_ping": True,  # Validate connections
+    # More conservative pool settings
+    "pool_size": 3,  # Reduced from 5
+    "max_overflow": 5,  # Reduced from 10
+    "pool_timeout": 60,  # Increased from 30
+    "pool_recycle": 1800,  # Reduced from 3600 to 30 minutes
+    "pool_pre_ping": True,
+    # Add statement timeout
+    "connect_args": {
+        "statement_timeout": 5000,  # 5 seconds
+        "command_timeout": 5000,    # 5 seconds
+    }
 }
 
 # Create async engine for main database
