@@ -64,18 +64,18 @@ class Settings(BaseSettings):
                 auth, host = parts
                 # Add SSL mode and other required parameters
                 if "?" not in host:
-                    host += "?sslmode=require"
+                    host += "?sslmode=require&connect_timeout=10"
                 elif "sslmode=" not in host:
-                    host += "&sslmode=require"
+                    host += "&sslmode=require&connect_timeout=10"
                 # Reconstruct the URL with asyncpg
                 v = f"postgresql+asyncpg://{auth}@{host}"
             else:
                 # If the URL format is unexpected, just replace the prefix
                 v = v.replace("postgres://", "postgresql+asyncpg://", 1)
                 if "?" not in v:
-                    v += "?sslmode=require"
+                    v += "?sslmode=require&connect_timeout=10"
                 elif "sslmode=" not in v:
-                    v += "&sslmode=require"
+                    v += "&sslmode=require&connect_timeout=10"
         
         return v
     

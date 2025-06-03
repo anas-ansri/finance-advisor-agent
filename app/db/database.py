@@ -1,6 +1,7 @@
 import logging
 from typing import AsyncGenerator
 import asyncio
+import socket
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -55,6 +56,7 @@ async def init_db():
     """
     max_retries = 5
     retry_delay = 2
+    last_error = None
     
     for attempt in range(max_retries):
         try:
@@ -78,6 +80,7 @@ async def init_db():
         except OperationalError as e:
             error_msg = str(e)
             logger.warning(f"Database connection attempt {attempt + 1}/{max_retries} failed: {error_msg}")
+            last_error = e
             
             # Check for specific asyncpg connection errors
             if "connection" in error_msg.lower() or "timeout" in error_msg.lower():
@@ -86,14 +89,32 @@ async def init_db():
             if attempt == max_retries - 1:
                 logger.error("All database connection attempts failed")
                 raise
-                
+            
             if attempt < max_retries - 1:
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, 30)  # Exponential backoff, max 30 seconds
         
+        except socket.gaierror as e:
+            error_msg = str(e)
+            logger.warning(f"DNS resolution failed on attempt {attempt + 1}/{max_retries}: {error_msg}")
+            last_error = e
+            
+            if attempt == max_retries - 1:
+                logger.error("Failed to resolve database hostname")
+                raise
+            
+            if attempt < max_retries - 1:
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, 30)
+        
         except Exception as e:
-            logger.error(f"Unexpected error during database initialization: {e}")
+            error_msg = str(e)
+            logger.error(f"Unexpected error during database initialization: {error_msg}")
+            last_error = e
             raise
+    
+    if last_error:
+        raise last_error
 
 
 async def init_test_db():
@@ -102,6 +123,7 @@ async def init_test_db():
     """
     max_retries = 3
     retry_delay = 1
+    last_error = None
     
     for attempt in range(max_retries):
         try:
@@ -126,13 +148,22 @@ async def init_test_db():
                 
         except OperationalError as e:
             logger.warning(f"Test database connection attempt {attempt + 1}/{max_retries} failed: {e}")
+            last_error = e
             
             if attempt == max_retries - 1:
                 raise
-                
+            
             if attempt < max_retries - 1:
                 await asyncio.sleep(retry_delay)
                 retry_delay *= 2
+        
+        except Exception as e:
+            logger.error(f"Unexpected error during test database initialization: {e}")
+            last_error = e
+            raise
+    
+    if last_error:
+        raise last_error
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
