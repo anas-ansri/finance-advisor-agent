@@ -1,24 +1,22 @@
-import asyncio
+from fastapi import FastAPI
 import asyncpg
 import os
 
-# Get database URL from env
-raw_url = os.getenv("DATABASE_URL")
+app = FastAPI()
 
-# Fix URL scheme if needed
+# Sanitize DATABASE_URL for asyncpg (remove +asyncpg if needed)
+raw_url = os.getenv("DATABASE_URL", "")
 if raw_url.startswith("postgresql+asyncpg://"):
     DATABASE_URL = raw_url.replace("postgresql+asyncpg://", "postgresql://", 1)
 else:
     DATABASE_URL = raw_url
 
-async def test_connection():
+@app.get("/")
+async def root():
     try:
         conn = await asyncpg.connect(DATABASE_URL)
         version = await conn.fetchval("SELECT version();")
-        print("✅ Connected to Postgres:", version)
         await conn.close()
+        return {"message": "✅ Connected", "postgres_version": version}
     except Exception as e:
-        print("❌ Connection failed:", e)
-
-if __name__ == "__main__":
-    asyncio.run(test_connection())
+        return {"message": "❌ Connection failed", "error": str(e)}
