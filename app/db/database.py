@@ -21,10 +21,12 @@ engine_config = {
     "pool_timeout": 60,  # Increased from 30
     "pool_recycle": 1800,  # Reduced from 3600 to 30 minutes
     "pool_pre_ping": True,
-    # Add statement timeout
+    # Add statement timeout using server_settings
     "connect_args": {
-        "statement_timeout": 5000,  # 5 seconds
-        "command_timeout": 5000,    # 5 seconds
+        "server_settings": {
+            "statement_timeout": "5000",  # 5 seconds in milliseconds
+            "command_timeout": "5000",    # 5 seconds in milliseconds
+        }
     }
 }
 
