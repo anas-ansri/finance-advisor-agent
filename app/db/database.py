@@ -21,13 +21,6 @@ engine_config = {
     "pool_timeout": 60,  # Increased from 30
     "pool_recycle": 1800,  # Reduced from 3600 to 30 minutes
     "pool_pre_ping": True,
-    # Add statement timeout using server_settings
-    "connect_args": {
-        "server_settings": {
-            "statement_timeout": "5000",  # 5 seconds in milliseconds
-            "command_timeout": "5000",    # 5 seconds in milliseconds
-        }
-    }
 }
 
 # Create async engine for main database
@@ -66,6 +59,10 @@ async def init_db():
     for attempt in range(max_retries):
         try:
             async with engine.begin() as conn:
+                # Set timeouts after connection is established
+                await conn.execute(text("SET statement_timeout = '5s'"))
+                await conn.execute(text("SET command_timeout = '5s'"))
+                
                 # Test the connection first with asyncpg
                 await conn.execute(text("SELECT 1"))
                 
@@ -109,6 +106,10 @@ async def init_test_db():
     for attempt in range(max_retries):
         try:
             async with test_engine.begin() as conn:
+                # Set timeouts after connection is established
+                await conn.execute(text("SET statement_timeout = '5s'"))
+                await conn.execute(text("SET command_timeout = '5s'"))
+                
                 # Test the connection
                 await conn.execute(text("SELECT 1"))
                 
@@ -144,6 +145,10 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         session = async_session_factory()
         logger.debug("Database session started (asyncpg)")
         
+        # Set timeouts for this session
+        await session.execute(text("SET statement_timeout = '5s'"))
+        await session.execute(text("SET command_timeout = '5s'"))
+        
         # Health check for Supabase with asyncpg
         await session.execute(text("SELECT 1"))
         
@@ -171,6 +176,10 @@ async def get_test_db() -> AsyncGenerator[AsyncSession, None]:
         session = test_async_session_factory()
         logger.debug("Test database session started (asyncpg)")
         
+        # Set timeouts for this session
+        await session.execute(text("SET statement_timeout = '5s'"))
+        await session.execute(text("SET command_timeout = '5s'"))
+        
         yield session
         await session.commit()
         logger.debug("Test database session committed")
@@ -193,6 +202,10 @@ async def check_db_health():
     """
     try:
         async with engine.begin() as conn:
+            # Set timeouts for this connection
+            await conn.execute(text("SET statement_timeout = '5s'"))
+            await conn.execute(text("SET command_timeout = '5s'"))
+            
             # Get PostgreSQL version
             result = await conn.execute(text("SELECT version()"))
             version = result.scalar()
@@ -231,6 +244,10 @@ async def log_connection_info():
     """
     try:
         async with engine.begin() as conn:
+            # Set timeouts for this connection
+            await conn.execute(text("SET statement_timeout = '5s'"))
+            await conn.execute(text("SET command_timeout = '5s'"))
+            
             # Get asyncpg connection info
             result = await conn.execute(text("""
                 SELECT 
