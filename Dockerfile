@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
 
-
+RUN apt install dnf
 
 RUN dnf install -y postgresql-devel
 
