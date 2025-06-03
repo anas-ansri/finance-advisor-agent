@@ -2,8 +2,14 @@ import asyncio
 import asyncpg
 import os
 
-# Read the DATABASE_URL from environment variables
-DATABASE_URL = os.getenv("DATABASE_URL")
+# Get database URL from env
+raw_url = os.getenv("DATABASE_URL")
+
+# Fix URL scheme if needed
+if raw_url.startswith("postgresql+asyncpg://"):
+    DATABASE_URL = raw_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+else:
+    DATABASE_URL = raw_url
 
 async def test_connection():
     try:
