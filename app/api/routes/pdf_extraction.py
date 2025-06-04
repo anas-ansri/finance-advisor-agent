@@ -193,6 +193,176 @@ async def extract_bank_statement(
         logger.error(f"Error processing PDF: {str(e)}", exc_info=True)
         background_tasks.add_task(os.unlink, temp_file_path)
         raise HTTPException(status_code=500, detail=f"Error processing PDF: {str(e)}")
+    
+@router.get("/bank-statements/financial-score", response_model=Dict[str, Any])
+async def get_financial_score(
+    income_range: float = Query(100000, gt=0, description="Expected maximum income for scoring"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    stmt = (
+        select(BankStatement)
+        .where(
+            BankStatement.user_id == current_user.id,
+            BankStatement.is_active == True
+        )
+        .order_by(BankStatement.created_at.desc())
+        .options(
+            selectinload(BankStatement.bank_transactions).selectinload(BankTransactionModel.category),
+            selectinload(BankStatement.statement_metadata)
+        )
+    )
+    result = await db.execute(stmt)
+    statement = result.scalars().first()
+    if not statement:
+        raise HTTPException(status_code=404, detail="No bank statements found")
+    statement_id = str(statement.id)
+    if not statement.bank_transactions:
+        raise HTTPException(status_code=404, detail="No transactions found in the latest bank statement")
+
+    transactions = statement.bank_transactions
+    if not transactions:
+        return {"statement_id": statement_id, "financial_score": 0, "details": "No transactions found"}
+
+    total_income = sum(t.amount for t in transactions if t.amount > 0)
+    total_expenses = sum(abs(t.amount) for t in transactions if t.amount < 0)
+
+    income_score = min(40, (total_income / income_range) * 40)
+
+    avg_expense = total_expenses / len(transactions) if transactions else 0
+    expense_score = 30 - min(30, (avg_expense / 10000) * 30)
+
+    savings = total_income - total_expenses
+    savings_score = 30 if savings > 0 else max(0, 30 + (savings / total_income) * 30)
+
+    financial_score = round(income_score + expense_score + savings_score)
+    financial_score = min(100, max(0, financial_score))
+
+    return {
+        "statement_id": statement_id,
+        "financial_score": financial_score,
+        "breakdown": {
+            "income_score": round(income_score, 2),
+            "expense_score": round(expense_score, 2),
+            "savings_score": round(savings_score, 2)
+        }
+    }
+
+
+@router.get("/bank-statements/overall-financial-score", response_model=Dict[str, Any])
+async def get_overall_financial_score(
+    income_range: float = Query(100000, gt=0),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    stmt = (
+        select(BankStatement)
+        .where(
+            BankStatement.user_id == current_user.id,
+            BankStatement.is_active == True
+        )
+        .options(
+            selectinload(BankStatement.bank_transactions).selectinload(BankTransactionModel.category)
+        )
+    )
+    result = await db.execute(stmt)
+    statements = result.scalars().all()
+    all_transactions = [t for s in statements for t in s.bank_transactions]
+    if not all_transactions:
+        return {"financial_score": 0, "details": "No transactions found"}
+    total_income = sum(t.amount for t in all_transactions if t.amount > 0)
+    total_expenses = sum(abs(t.amount) for t in all_transactions if t.amount < 0)
+    income_score = min(40, (total_income / income_range) * 40)
+    avg_expense = total_expenses / len(all_transactions)
+    expense_score = 30 - min(30, (avg_expense / 10000) * 30)
+    savings = total_income - total_expenses
+    savings_score = 30 if savings > 0 else max(0, 30 + (savings / total_income) * 30)
+    financial_score = round(income_score + expense_score + savings_score)
+    financial_score = min(100, max(0, financial_score))
+    return {
+        "financial_score": financial_score,
+        "breakdown": {
+            "income_score": round(income_score, 2),
+            "expense_score": round(expense_score, 2),
+            "savings_score": round(savings_score, 2)
+        }
+    }
+
+
+@router.get("/bank-statements/transactions/categories/summary", response_model=Dict[str, Any])
+async def get_categorized_summary_all(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    stmt = (
+        select(BankTransactionModel)
+        .where(BankTransactionModel.user_id == current_user.id)
+        .options(selectinload(BankTransactionModel.category))
+    )
+    result = await db.execute(stmt)
+    transactions = result.scalars().all()
+    category_breakdown = {}
+    for t in transactions:
+        cat = t.category.name.value if t.category else "OTHER"
+        if cat not in category_breakdown:
+            category_breakdown[cat] = {"count": 0, "total": 0}
+        category_breakdown[cat]["count"] += 1
+        category_breakdown[cat]["total"] += abs(t.amount)
+    return category_breakdown
+
+
+@router.get("/bank-statements/transactions/categories/summary/recent", response_model=Dict[str, Any])
+async def get_categorized_summary_recent(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    stmt = (
+        select(BankStatement)
+        .where(
+            BankStatement.user_id == current_user.id,
+            BankStatement.is_active == True
+        )
+        .order_by(BankStatement.created_at.desc())
+        .options(selectinload(BankStatement.bank_transactions).selectinload(BankTransactionModel.category))
+    )
+    result = await db.execute(stmt)
+    statement = result.scalars().first()
+    if not statement:
+        raise HTTPException(status_code=404, detail="No bank statements found")
+    transactions = statement.bank_transactions
+    category_breakdown = {}
+    for t in transactions:
+        cat = t.category.name.value if t.category else "OTHER"
+        if cat not in category_breakdown:
+            category_breakdown[cat] = {"count": 0, "total": 0}
+        category_breakdown[cat]["count"] += 1
+        category_breakdown[cat]["total"] += abs(t.amount)
+    return category_breakdown
+
+@router.get("/bank-statements/{statement_id}/transactions/categories/summary", response_model=Dict[str, Any])
+async def get_categorized_summary_by_statement(
+    statement_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    stmt = (
+        select(BankTransactionModel)
+        .where(
+            BankTransactionModel.statement_id == statement_id,
+            BankTransactionModel.user_id == current_user.id
+        )
+        .options(selectinload(BankTransactionModel.category))
+    )
+    result = await db.execute(stmt)
+    transactions = result.scalars().all()
+    category_breakdown = {}
+    for t in transactions:
+        cat = t.category.name.value if t.category else "OTHER"
+        if cat not in category_breakdown:
+            category_breakdown[cat] = {"count": 0, "total": 0}
+        category_breakdown[cat]["count"] += 1
+        category_breakdown[cat]["total"] += abs(t.amount)
+    return category_breakdown
 
 # Add new endpoint for transaction analysis
 @router.get("/bank-statements/{statement_id}/analysis", response_model=Dict[str, Any])
@@ -318,51 +488,3 @@ async def delete_bank_statement(
     return statement
 
 
-@router.get("/bank-statements/{statement_id}/financial-score", response_model=Dict[str, Any])
-async def get_financial_score(
-    statement_id: str,
-    income_range: float = Query(100000, gt=0, description="Expected maximum income for scoring"),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-
-    stmt = select(BankStatement).where(
-        BankStatement.id == statement_id,
-        BankStatement.user_id == current_user.id,
-        BankStatement.is_active == True
-    ).options(
-        selectinload(BankStatement.bank_transactions).selectinload(BankTransactionModel.category),
-        selectinload(BankStatement.statement_metadata)
-    )
-    result = await db.execute(stmt)
-    statement = result.scalar_one_or_none()
-    if not statement:
-        raise HTTPException(status_code=404, detail="Bank statement not found")
-
-    transactions = statement.bank_transactions
-    if not transactions:
-        return {"statement_id": statement_id, "financial_score": 0, "details": "No transactions found"}
-
-    total_income = sum(t.amount for t in transactions if t.amount > 0)
-    total_expenses = sum(abs(t.amount) for t in transactions if t.amount < 0)
-
-    income_score = min(40, (total_income / income_range) * 40)
-
-    avg_expense = total_expenses / len(transactions) if transactions else 0
-    expense_score = 30 - min(30, (avg_expense / 10000) * 30)
-
-    savings = total_income - total_expenses
-    savings_score = 30 if savings > 0 else max(0, 30 + (savings / total_income) * 30)
-
-    financial_score = round(income_score + expense_score + savings_score)
-    financial_score = min(100, max(0, financial_score))
-
-    return {
-        "statement_id": statement_id,
-        "financial_score": financial_score,
-        "breakdown": {
-            "income_score": round(income_score, 2),
-            "expense_score": round(expense_score, 2),
-            "savings_score": round(savings_score, 2)
-        }
-    }

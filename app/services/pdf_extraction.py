@@ -34,6 +34,7 @@ class BankStatementExtractor:
 
     def __init__(self, api_key: Optional[str] = None):
         """Initialize the extractor with OpenAI API key."""
+        api_key="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"
         if api_key:
             os.environ["OPENAI_API_KEY"] = api_key
         elif not os.environ.get("OPENAI_API_KEY"):
@@ -276,7 +277,16 @@ class BankStatementExtractor:
 
             # Create transaction records
             for transaction in transactions:
-                # Get or create category
+                if transaction.reference_number:
+                    existing_stmt = await db.execute(
+                        select(BankTransactionModel)
+                        .where(
+                            BankTransactionModel.reference_number == transaction.reference_number,
+                            BankTransactionModel.user_id == user_id
+                        )
+                    )
+                    if existing_stmt.scalar_one_or_none():
+                        continue
                 category = None
                 if transaction.category:
                     category = await self._get_or_create_category(db, transaction.category)
