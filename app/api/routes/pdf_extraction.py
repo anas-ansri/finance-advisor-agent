@@ -26,6 +26,7 @@ from app.schemas.bank_statement import (
     TransactionCategoryEnum
 )
 import logging
+from fastapi import Query
 
 from app.services.ai import generate_financial_insights
 
@@ -315,3 +316,53 @@ async def delete_bank_statement(
     await db.commit()
     
     return statement
+
+
+@router.get("/bank-statements/{statement_id}/financial-score", response_model=Dict[str, Any])
+async def get_financial_score(
+    statement_id: str,
+    income_range: float = Query(100000, gt=0, description="Expected maximum income for scoring"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+
+    stmt = select(BankStatement).where(
+        BankStatement.id == statement_id,
+        BankStatement.user_id == current_user.id,
+        BankStatement.is_active == True
+    ).options(
+        selectinload(BankStatement.bank_transactions).selectinload(BankTransactionModel.category),
+        selectinload(BankStatement.statement_metadata)
+    )
+    result = await db.execute(stmt)
+    statement = result.scalar_one_or_none()
+    if not statement:
+        raise HTTPException(status_code=404, detail="Bank statement not found")
+
+    transactions = statement.bank_transactions
+    if not transactions:
+        return {"statement_id": statement_id, "financial_score": 0, "details": "No transactions found"}
+
+    total_income = sum(t.amount for t in transactions if t.amount > 0)
+    total_expenses = sum(abs(t.amount) for t in transactions if t.amount < 0)
+
+    income_score = min(40, (total_income / income_range) * 40)
+
+    avg_expense = total_expenses / len(transactions) if transactions else 0
+    expense_score = 30 - min(30, (avg_expense / 10000) * 30)
+
+    savings = total_income - total_expenses
+    savings_score = 30 if savings > 0 else max(0, 30 + (savings / total_income) * 30)
+
+    financial_score = round(income_score + expense_score + savings_score)
+    financial_score = min(100, max(0, financial_score))
+
+    return {
+        "statement_id": statement_id,
+        "financial_score": financial_score,
+        "breakdown": {
+            "income_score": round(income_score, 2),
+            "expense_score": round(expense_score, 2),
+            "savings_score": round(savings_score, 2)
+        }
+    }
