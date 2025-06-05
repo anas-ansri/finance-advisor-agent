@@ -16,6 +16,7 @@ from app.core.security import get_current_user
 from app.db.database import get_db
 from app.models.user import User
 from app.models.bank_statement import BankStatement, BankTransaction as BankTransactionModel
+from app.models.bank_statement_metadata import BankStatementMetadata
 from app.models.account import Account
 from app.services.pdf_extraction import BankStatementExtractor
 from app.schemas.bank_statement import (
@@ -488,3 +489,34 @@ async def delete_bank_statement(
     return statement
 
 
+@router.get("/accounts/balances", response_model=Dict[str, float])
+async def get_all_account_balances(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get the most recent closing balance of all accounts associated with the current user.
+    """
+    stmt = (
+        select(BankStatementMetadata)
+        .join(BankStatementMetadata.statement)
+        .where(
+            BankStatement.user_id == current_user.id,
+            BankStatement.is_active == True
+        )
+        .order_by(BankStatement.created_at.desc())
+    )
+
+    result = await db.execute(stmt)
+    metadata_list = result.scalars().all()
+
+    account_balances = {}
+    seen_accounts = set()
+
+    for metadata in metadata_list:
+        acc_num = metadata.account_number
+        if acc_num not in seen_accounts:
+            seen_accounts.add(acc_num)
+            account_balances[acc_num] = metadata.closing_balance
+
+    return account_balances
