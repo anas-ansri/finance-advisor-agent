@@ -282,13 +282,17 @@ class BankStatementExtractor:
             )
             db.add(db_metadata)
             
-            #upade account balance if account_id is provided\
-            db_account=Account(
-                id=account_id,
-                user_id=user_id,
-                balance=metadata.closing_balance
-            )
-            db.add(db_account)
+            # Update account balance if account_id is provided
+            if account_id and metadata.closing_balance is not None:
+                result = await db.execute(
+                    select(Account).where(Account.id == account_id, Account.user_id == user_id)
+                )
+                db_account = result.scalar_one_or_none()
+                if db_account:
+                    db_account.balance = metadata.closing_balance
+                else:
+                    logger.warning(f"Account with ID {account_id} not found for user {user_id}")
+            
             total_transactions = len(transactions)
 
             # Create transaction records
