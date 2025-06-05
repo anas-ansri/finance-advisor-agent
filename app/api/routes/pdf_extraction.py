@@ -142,7 +142,7 @@ async def extract_bank_statement(
         temp_file.close()
 
         # Extract data from PDF
-        extractor = BankStatementExtractor()
+        extractor = BankStatementExtractor(api_key=current_user.openai_api_key)
         
         print("Starting extraction process...")
         statement_metadata, transactions = extractor.extract_data(temp_file_path)

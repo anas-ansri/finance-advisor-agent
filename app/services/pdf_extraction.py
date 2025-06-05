@@ -9,6 +9,7 @@ from langchain_community.document_loaders import PyPDFLoader
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from app.models.bank_statement_metadata import BankStatementMetadata
+from app.models.expense import Expense
 from app.schemas.bank_statement import BankStatementWithData, StatementMetadata, BankTransaction, TransactionCategoryEnum
 from app.models.bank_statement import BankStatement
 from app.models.bank_transaction import BankTransaction as BankTransactionModel, TransactionCategoryEnum as DBTransactionCategoryEnum
@@ -242,13 +243,13 @@ class BankStatementExtractor:
             return category
 
     async def save_to_database(self,
-                             db: Session,
-                             user_id: str,
-                             metadata: StatementMetadata,
-                             transactions: List[BankTransaction],
-                             title: str,
-                             description: Optional[str] = None,
-                             account_id: Optional[UUID] = None) -> BankStatement:
+                         db: Session,
+                         user_id: str,
+                         metadata: StatementMetadata,
+                         transactions: List[BankTransaction],
+                         title: str,
+                         description: Optional[str] = None,
+                         account_id: Optional[UUID] = None) -> BankStatement:
         """Save extracted data to database with enhanced error handling."""
         
         try:
@@ -274,6 +275,8 @@ class BankStatementExtractor:
             )
             db.add(db_metadata)
 
+            total_transactions = len(transactions)
+
             # Create transaction records
             for transaction in transactions:
                 if transaction.reference_number:
@@ -281,11 +284,14 @@ class BankStatementExtractor:
                         select(BankTransactionModel)
                         .where(
                             BankTransactionModel.reference_number == transaction.reference_number,
-                            BankTransactionModel.user_id == user_id
+                            BankTransactionModel.user_id == user_id,
                         )
                     )
-                    if existing_stmt.scalar_one_or_none():
+                    # Use first() instead of scalar_one_or_none() to handle multiple results
+                    existing_transaction = existing_stmt.scalars().first()
+                    if existing_transaction:
                         continue
+                
                 category = None
                 if transaction.category:
                     category = await self._get_or_create_category(db, transaction.category)
@@ -304,12 +310,26 @@ class BankStatementExtractor:
                     is_recurring=getattr(transaction, 'is_recurring', False),
                     evidence=transaction.evidence
                 )
+
+                # If amount is debited add the transaction to expense
+                if (transaction.transaction_type == "debit"):
+                    db_expense = Expense(
+                        user_id=user_id,
+                        amount=transaction.amount,
+                        description=transaction.description,
+                        date=transaction.date,
+                        is_recurring=getattr(transaction, 'is_recurring', False),
+                        category_id=category.id if category else None,
+                        transaction_id=db_transaction.id,
+                    )
+                    db.add(db_expense)
+                total_transactions += 1
                 db.add(db_transaction)
 
             await db.commit()
             await db.refresh(db_statement)
             
-            print(f"Successfully saved statement with {len(transactions)} transactions")
+            print(f"Successfully saved statement with {total_transactions} transactions")
             return db_statement
 
         except Exception as e:

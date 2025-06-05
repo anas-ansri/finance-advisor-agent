@@ -62,3 +62,4 @@ class BankTransaction(Base):
     category = relationship("BankCategory", back_populates="transactions")
     account = relationship("Account", back_populates="transactions")
     user = relationship("User", back_populates="transactions")
+    transactions = relationship("Expense", back_populates="expenses", cascade="all, delete-orphan")
