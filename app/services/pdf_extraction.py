@@ -14,6 +14,7 @@ from app.schemas.bank_statement import BankStatementWithData, StatementMetadata,
 from app.models.bank_statement import BankStatement
 from app.models.bank_transaction import BankTransaction as BankTransactionModel, TransactionCategoryEnum as DBTransactionCategoryEnum
 from app.models.bank_category import BankCategory
+from app.models.account import Account
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
@@ -280,7 +281,14 @@ class BankStatementExtractor:
                 closing_balance=metadata.closing_balance
             )
             db.add(db_metadata)
-
+            
+            #upade account balance if account_id is provided\
+            db_account=Account(
+                id=account_id,
+                user_id=user_id,
+                balance=metadata.closing_balance
+            )
+            db.add(db_account)
             total_transactions = len(transactions)
 
             # Create transaction records
