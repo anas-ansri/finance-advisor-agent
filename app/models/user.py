@@ -52,6 +52,7 @@ class User(Base):
     ai_preferences = relationship("AIPreference", back_populates="user", uselist=False, cascade="all, delete-orphan")
     statements = relationship("BankStatement", back_populates="user", cascade="all, delete-orphan")
     transactions = relationship("BankTransaction", back_populates="user", cascade="all, delete-orphan")
+    persona_profile = relationship("PersonaProfile", back_populates="user", uselist=False)
 
 # Import at the bottom to avoid circular imports
 from app.models.conversation import Conversation

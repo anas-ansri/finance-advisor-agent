@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "")
     SUPABASE_TEST_URL: str = os.getenv("SUPABASE_TEST_URL", "")
     SUPABASE_TEST_KEY: str = os.getenv("SUPABASE_TEST_KEY", "")
+
+    QLOO_API_KEY: str = os.getenv("QLOO_API_KEY", "your_qloo_api_key_here")
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "your_gemini_api_key_here")
     
     class Config:
         case_sensitive = True
