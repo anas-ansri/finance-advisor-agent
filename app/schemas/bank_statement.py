@@ -108,7 +108,7 @@ class TagInDBBase(TagBase):
     updated_at: datetime
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class Tag(TagInDBBase):
@@ -147,7 +147,7 @@ class BankStatementInDBBase(BankStatementBase):
     updated_at: datetime
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class BankStatementWithData(BankStatementInDBBase):

@@ -20,7 +20,7 @@ class PersonaProfileOut(PersonaProfileBase):
     updated_at: Optional[datetime]
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Schema for the final response from the /persona endpoint
 class PersonaResponse(BaseModel):

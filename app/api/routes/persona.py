@@ -40,7 +40,7 @@ async def get_user_persona(
                 detail="Could not generate a Persona Profile for this user. Ensure there are enough transactions.",
             )
             
-        profile_out = PersonaProfileOut.from_orm(persona_profile)
+        profile_out = PersonaProfileOut.model_validate(persona_profile)
         
         return PersonaResponse(profile=profile_out)
 
