@@ -13,6 +13,9 @@ class PersonaProfile(Base):
     
     persona_name = Column(String, nullable=False)
     persona_description = Column(String, nullable=False)
+    key_traits = Column(JSON, nullable=True) # Will store a list of strings
+    lifestyle_summary = Column(String, nullable=True)
+    financial_tendencies = Column(String, nullable=True)
     
     # Store the raw JSON from Qloo for debugging and potential future use
     source_qloo_data = Column(JSON, nullable=True)

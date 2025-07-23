@@ -7,11 +7,17 @@ from datetime import datetime
 class PersonaProfileBase(BaseModel):
     persona_name: str
     persona_description: str
+    key_traits: List[str]
+    lifestyle_summary: str
+    financial_tendencies: str
 
 # Schema for creating a Persona Profile (used internally)
 class PersonaProfileCreate(PersonaProfileBase):
     user_id: uuid.UUID
     source_qloo_data: Optional[Dict[str, Any]] = None
+    key_traits: List[str]
+    lifestyle_summary: str
+    financial_tendencies: str
 
 # Schema for reading/returning a Persona Profile from the API
 class PersonaProfileOut(PersonaProfileBase):
