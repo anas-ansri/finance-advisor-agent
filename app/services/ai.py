@@ -24,6 +24,7 @@ from app.models.ai_insight import AIInsight
 from app.schemas.ai_insight import AIInsightCreate
 from app.services.transaction import get_all_transactions
 from app.models.bank_transaction import BankTransaction
+import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,18 @@ class FinancialInsights(BaseModel):
     """Model for a list of financial insights."""
     insights: List[FinancialInsight] = Field(..., min_items=5, max_items=7, description="List of financial insights")
 
+# Utility to call Gemini LLM
+async def generate_gemini_response(prompt: str) -> str:
+    try:
+        genai.configure(api_key=settings.GEMINI_API_KEY)
+        llm = genai.GenerativeModel('gemini-1.5-flash')
+        response = llm.generate_content(prompt)
+        response_text = response.text.strip().replace("```json", "").replace("```", "")
+        return response_text
+    except Exception as e:
+        logger.error(f"Gemini API error: {e}")
+        raise HTTPException(status_code=500, detail=f"Gemini API error: {e}")
+
 async def generate_ai_response(
     db: AsyncSession,
     user_id: UUID,
@@ -46,170 +59,35 @@ async def generate_ai_response(
     model_id: Optional[int] = None,
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
+    use_persona: bool = False,
 ) -> str:
     """
-    Generate a response from an AI model.
-    
-    Args:
-        db: Database session
-        user_id: User ID
-        conversation_id: Conversation ID
-        messages: List of messages in the conversation
-        model_id: ID of the AI model to use (optional)
-        temperature: Temperature parameter for generation (optional)
-        max_tokens: Maximum tokens to generate (optional)
-        
-    Returns:
-        Generated response text
+    Generate a response from Gemini LLM.
     """
     try:
-        # Get user and check API key
         user = await get_user(db, user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        
-        if not user.openai_api_key:
-            raise HTTPException(
-                status_code=400,
-                detail="OpenAI API key not set. Please set your API key in your profile settings."
-            )
-        
-        # Get user preferences
-        user_preferences = await get_ai_preference_by_user_id(db, user_id=user_id)
-        
-        # Get the latest user message
-        latest_user_message = next((m for m in reversed(messages) if m.role == "user"), None)
-        if not latest_user_message:
-            raise ValueError("No user message found in the conversation")
-        
-        # Check if this is a financial query
-        is_financial_query = any(keyword in latest_user_message.content.lower() for keyword in [
-            "money", "finance", "budget", "expense", "income", "saving", "investment",
-            "spending", "cost", "price", "salary", "wage", "debt", "loan", "credit",
-            "bank", "account", "transaction", "balance", "wealth", "asset", "liability",
-            "cash", "payment", "bill", "tax", "interest", "profit", "loss", "revenue",
-            "expense", "financial", "monetary", "economic", "fiscal", "budgetary"
-        ])
-        
-        if is_financial_query:
-            # Use financial advisor for financial queries
-            advisor = FinancialAdvisor(user.openai_api_key)
-            return await advisor.get_advice(
-                db=db,
-                user_id=user_id,
-                conversation_id=conversation_id,
-                query=latest_user_message.content
-            )
-        
-        # For non-financial queries, use the regular AI model
-        # Determine which model to use
-        model_to_use = None
-        if model_id:
-            model_to_use = await get_ai_model(db, model_id=model_id)
-        elif user_preferences and user_preferences.preferred_model_id:
-            model_to_use = await get_ai_model(db, model_id=user_preferences.preferred_model_id)
-        
-        # If no model is specified, use the default
-        if not model_to_use:
-            # Use default OpenAI model
-            model_provider = "openai"
-            model_id_str = settings.DEFAULT_MODEL
-        else:
-            model_provider = model_to_use.provider
-            model_id_str = model_to_use.model_id
-        
-        # Determine temperature
-        if temperature is not None:
-            temp_to_use = temperature
-        elif user_preferences and user_preferences.temperature is not None:
-            temp_to_use = float(user_preferences.temperature)
-        elif model_to_use and model_to_use.temperature is not None:
-            temp_to_use = model_to_use.temperature
-        else:
-            temp_to_use = 0.7  # Default temperature
-        
-        # Determine max tokens
-        if max_tokens is not None:
-            max_tokens_to_use = max_tokens
-        elif model_to_use and model_to_use.max_tokens is not None:
-            max_tokens_to_use = model_to_use.max_tokens
-        else:
-            max_tokens_to_use = None  # Let the API decide
-        
-        # Add system prompt if available and not already present
-        if user_preferences and user_preferences.system_prompt and not any(m.role == "system" for m in messages):
-            messages = [ChatMessage(role="system", content=user_preferences.system_prompt)] + messages
-        
-        # Format messages for the API
-        formatted_messages = [{"role": m.role, "content": m.content} for m in messages]
-        
-        # Generate response based on provider
-        if model_provider == "openai":
-            return await generate_openai_response(
-                formatted_messages,
-                model_id_str,
-                temp_to_use,
-                max_tokens_to_use,
-                user.openai_api_key
-            )
-        elif model_provider == "anthropic":
-            if not user.anthropic_api_key:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Anthropic API key not set. Please set your API key in your profile settings."
-                )
-            # Implement Anthropic API integration
-            raise NotImplementedError("Anthropic API integration not implemented yet")
-        elif model_provider == "local":
-            # Implement local model integration
-            raise NotImplementedError("Local model integration not implemented yet")
-        else:
-            raise ValueError(f"Unsupported model provider: {model_provider}")
-    
+        # Persona integration
+        if use_persona:
+            from app.services.persona_engine import PersonaEngineService
+            persona_service = PersonaEngineService(db)
+            persona_profile = await persona_service.generate_persona_for_user(user)
+            if persona_profile and getattr(persona_profile, 'persona_description', None):
+                persona_system_prompt = f"You are responding as the user's financial persona: {persona_profile.persona_name}. {persona_profile.persona_description}\nKey Traits: {persona_profile.key_traits}\nLifestyle: {persona_profile.lifestyle_summary}\nFinancial Tendencies: {persona_profile.financial_tendencies}"
+                messages = [ChatMessage(role="system", content=persona_system_prompt)] + messages
+        # Compose prompt from messages
+        prompt = "\n".join([f"{m.role}: {m.content}" for m in messages])
+        return await generate_gemini_response(prompt)
     except Exception as e:
-        logger.exception(f"Error generating AI response: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error generating AI response: {str(e)}")
-
-
-async def generate_openai_response(
-    messages: List[dict],
-    model: str,
-    temperature: float,
-    max_tokens: Optional[int] = None,
-    api_key: str = None,
-) -> str:
-    """
-    Generate a response using the OpenAI API.
-    """
-    try:
-        # Initialize OpenAI client
-        client = AsyncOpenAI(api_key=api_key)
-        
-        # Prepare request parameters
-        params = {
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-        }
-        
-        if max_tokens:
-            params["max_tokens"] = max_tokens
-        
-        # Make API request
-        response = await client.chat.completions.create(**params)
-        
-        # Extract and return the generated text
-        return response.choices[0].message.content
-    
-    except Exception as e:
-        logger.exception(f"OpenAI API error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"OpenAI API error: {str(e)}")
+        logger.exception(f"Error generating Gemini response: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating Gemini response: {str(e)}")
 
 async def generate_financial_insights(
     db: AsyncSession,
     user_id: UUID,
 ):
-    """Generates AI-powered financial insights for the user."""
+    """Generates AI-powered financial insights for the user using Gemini."""
     print(f"Generating insights for user: {user_id}")
 
     # Fetch all transactions for the user with category eagerly loaded
@@ -243,8 +121,8 @@ async def generate_financial_insights(
     )
     
     # Create the prompt template
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", """You are an expert financial advisor AI. Analyze the provided financial data and generate personalized insights.
+    prompt = f"""
+You are an expert financial advisor AI. Analyze the provided financial data and generate personalized insights.
 Focus on:
 1. Progress towards financial goals
 2. Spending patterns and optimization opportunities
@@ -258,8 +136,8 @@ Each insight must be specific and actionable, with concrete numbers and steps.
 Financial Data:
 {data_summary}
 
-{format_instructions}"""),
-    ])
+Respond in JSON with a list of insights, each with title, description, category, and priority.
+"""
     
     # Prepare data summary for AI analysis
     data_summary = f"""

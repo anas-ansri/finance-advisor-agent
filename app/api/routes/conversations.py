@@ -172,7 +172,8 @@ async def chat_with_ai(
         messages=chat_request.messages,
         model_id=chat_request.model_id,
         temperature=chat_request.temperature,
-        max_tokens=chat_request.max_tokens
+        max_tokens=chat_request.max_tokens,
+        use_persona=chat_request.use_persona
     )
     
     # Add AI response to conversation

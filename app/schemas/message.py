@@ -30,6 +30,7 @@ class ChatRequest(BaseModel):
     temperature: Optional[float] = Field(None, description="Temperature parameter for generation")
     max_tokens: Optional[int] = Field(None, description="Maximum tokens to generate")
     stream: bool = Field(False, description="Whether to stream the response")
+    use_persona: bool = Field(False, description="Whether to use persona-based personalization.")
 
 
 class ChatResponse(BaseModel):
