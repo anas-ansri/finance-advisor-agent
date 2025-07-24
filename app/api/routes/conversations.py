@@ -1,4 +1,5 @@
 from typing import Any, List, Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,7 +51,7 @@ async def read_conversations(
 
 @router.get("/{conversation_id}", response_model=Conversation)
 async def read_conversation(
-    conversation_id: int,
+    conversation_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Any:
@@ -67,7 +68,7 @@ async def read_conversation(
 
 @router.put("/{conversation_id}", response_model=Conversation)
 async def update_conversation_title(
-    conversation_id: int,
+    conversation_id: UUID,
     conversation_in: ConversationUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -105,7 +106,7 @@ async def delete_conversation_by_id(
 
 @router.get("/{conversation_id}/messages", response_model=List[ChatMessage])
 async def read_conversation_messages(
-    conversation_id: int,
+    conversation_id: UUID,
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
