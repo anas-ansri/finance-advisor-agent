@@ -1,5 +1,6 @@
 from typing import Any, List, Optional
 from uuid import UUID
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
@@ -19,9 +20,10 @@ from app.services.conversation import (
     update_conversation,
 )
 from app.services.message import add_message_to_conversation, get_conversation_messages
-from app.services.ai import generate_ai_response
+from app.services.ai import generate_ai_response, generate_ai_streaming_response
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("", response_model=Conversation)
@@ -130,22 +132,27 @@ async def read_conversation_messages(
 
 # Streaming generator for AI response
 async def ai_response_streamer(db, user_id, conversation_id, messages, model_id, temperature, max_tokens, use_persona):
-    # This is a mock streaming implementation. Replace with your LLM's streaming API if available.
-    # For now, we just yield the response one word at a time with a delay.
-    ai_response = await generate_ai_response(
-        db,
-        user_id=user_id,
-        conversation_id=conversation_id,
-        messages=messages,
-        model_id=model_id,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        use_persona=use_persona
-    )
-    # Simulate streaming by yielding word by word
-    for word in ai_response.split():
-        yield word + ' '
-        await asyncio.sleep(0.03)
+    """
+    Stream AI response using Gemini's streaming API for real-time response.
+    """
+    print("Starting AI streaming response...")
+    
+    try:
+        # Use the new streaming AI response function
+        async for chunk in generate_ai_streaming_response(
+            db,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            messages=messages,
+            model_id=model_id,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            use_persona=use_persona
+        ):
+            yield chunk
+    except Exception as e:
+        logger.error(f"Error in AI streaming: {str(e)}")
+        yield f"Error: {str(e)}"
 
 @router.post("/chat")
 async def chat_with_ai(
@@ -185,9 +192,11 @@ async def chat_with_ai(
         content=user_message.content
     )
     if chat_request.stream:
-        # Stream the AI response as plain text
-        return StreamingResponse(
-            ai_response_streamer(
+        # For streaming, we need to collect the full response and save it after streaming
+        collected_response = []
+        
+        async def stream_and_collect():
+            async for chunk in ai_response_streamer(
                 db,
                 user_id=current_user.id,
                 conversation_id=conversation_id,
@@ -196,7 +205,25 @@ async def chat_with_ai(
                 temperature=chat_request.temperature,
                 max_tokens=chat_request.max_tokens,
                 use_persona=chat_request.use_persona
-            ),
+            ):
+                collected_response.append(chunk)
+                yield chunk
+            
+            # Save the complete response to the conversation after streaming
+            full_response = "".join(collected_response)
+            try:
+                await add_message_to_conversation(
+                    db,
+                    conversation_id=conversation_id,
+                    role="assistant",
+                    content=full_response
+                )
+            except Exception as e:
+                logger.error(f"Error saving streamed response to conversation: {str(e)}")
+        
+        # Stream the AI response as plain text 
+        return StreamingResponse(
+            stream_and_collect(),
             media_type="text/plain"
         )
     else:
@@ -221,3 +248,83 @@ async def chat_with_ai(
             "conversation_id": conversation_id,
             "message": {"role": "assistant", "content": ai_response}
         }
+
+
+@router.post("/{conversation_id}/generate-persona")
+async def generate_persona_for_conversation(
+    conversation_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Generate or regenerate persona for the user.
+    This can be called separately to pre-generate persona without affecting chat performance.
+    """
+    # Check if conversation exists and belongs to user
+    conversation = await get_conversation(db, conversation_id=conversation_id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    if conversation.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    try:
+        from app.services.persona_engine import PersonaEngineService
+        persona_service = PersonaEngineService(db)
+        
+        # Force regenerate persona
+        persona_profile = await persona_service.generate_persona_for_user(
+            current_user, 
+            force_regenerate=True
+        )
+        
+        if persona_profile:
+            return {
+                "success": True,
+                "message": "Persona generated successfully",
+                "persona_name": persona_profile.persona_name
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Failed to generate persona. Please ensure you have sufficient transaction data."
+            }
+    except Exception as e:
+        logger.error(f"Error generating persona: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error generating persona: {str(e)}"
+        )
+
+
+@router.get("/persona-status")
+async def get_persona_status(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Check if user has an existing persona profile.
+    """
+    try:
+        from app.services.persona_engine import PersonaEngineService
+        persona_service = PersonaEngineService(db)
+        
+        persona_profile = await persona_service.get_existing_persona_for_user(current_user)
+        
+        if persona_profile:
+            return {
+                "has_persona": True,
+                "persona_name": persona_profile.persona_name,
+                "created_at": persona_profile.created_at,
+                "updated_at": persona_profile.updated_at
+            }
+        else:
+            return {
+                "has_persona": False,
+                "message": "No persona profile found. Enable persona in chat to generate one."
+            }
+    except Exception as e:
+        logger.error(f"Error checking persona status: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error checking persona status: {str(e)}"
+        )

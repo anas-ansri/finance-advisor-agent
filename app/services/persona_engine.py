@@ -317,10 +317,25 @@ class PersonaEngineService:
             logger.info(f"Created new Persona Profile for user {user.id}")
             return new_profile
 
-    async def generate_persona_for_user(self, user: User) -> Optional[PersonaProfile]:
+    async def get_existing_persona_for_user(self, user: User) -> Optional[PersonaProfile]:
+        """
+        Get existing persona profile for user without regenerating.
+        """
+        stmt = select(PersonaProfile).filter(PersonaProfile.user_id == user.id)
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def generate_persona_for_user(self, user: User, force_regenerate: bool = False) -> Optional[PersonaProfile]:
         """
         The main orchestration method to generate a Persona Profile for a given user.
         """
+        # Check if persona already exists and force_regenerate is False
+        if not force_regenerate:
+            existing_profile = await self.get_existing_persona_for_user(user)
+            if existing_profile:
+                logger.info(f"Using existing persona profile for user {user.id}")
+                return existing_profile
+
         entities = await self._get_transaction_entities(user)  # Add await
         if not entities:
             logger.warning(f"Could not generate Persona for user {user.id}: No transaction entities found.")

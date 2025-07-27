@@ -51,6 +51,23 @@ async def generate_gemini_response(prompt: str) -> str:
         logger.error(f"Gemini API error: {e}")
         raise HTTPException(status_code=500, detail=f"Gemini API error: {e}")
 
+# Streaming utility for Gemini LLM
+async def generate_gemini_streaming_response(prompt: str):
+    """
+    Generate streaming response from Gemini LLM.
+    """
+    try:
+        genai.configure(api_key=settings.GEMINI_API_KEY)
+        llm = genai.GenerativeModel('gemini-1.5-flash')
+        response = llm.generate_content(prompt, stream=True)
+        
+        for chunk in response:
+            if chunk.text:
+                yield chunk.text
+    except Exception as e:
+        logger.error(f"Gemini streaming API error: {e}")
+        yield f"Error: {str(e)}"
+
 async def generate_ai_response(
     db: AsyncSession,
     user_id: UUID,
@@ -68,20 +85,66 @@ async def generate_ai_response(
         user = await get_user(db, user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        # Persona integration
+        
+        # Persona integration - optimized to use existing persona if available
         if use_persona:
             from app.services.persona_engine import PersonaEngineService
             persona_service = PersonaEngineService(db)
-            persona_profile = await persona_service.generate_persona_for_user(user)
+            # First try to get existing persona without regenerating
+            persona_profile = await persona_service.get_existing_persona_for_user(user)
             if persona_profile and getattr(persona_profile, 'persona_description', None):
                 persona_system_prompt = f"You are responding as the user's financial persona: {persona_profile.persona_name}. {persona_profile.persona_description}\nKey Traits: {persona_profile.key_traits}\nLifestyle: {persona_profile.lifestyle_summary}\nFinancial Tendencies: {persona_profile.financial_tendencies}"
                 messages = [ChatMessage(role="system", content=persona_system_prompt)] + messages
+            else:
+                logger.info(f"No existing persona found for user {user_id}, will use default response")
+        
         # Compose prompt from messages
         prompt = "\n".join([f"{m.role}: {m.content}" for m in messages])
         return await generate_gemini_response(prompt)
     except Exception as e:
         logger.exception(f"Error generating Gemini response: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error generating Gemini response: {str(e)}")
+
+async def generate_ai_streaming_response(
+    db: AsyncSession,
+    user_id: UUID,
+    conversation_id: UUID,
+    messages: List[ChatMessage],
+    model_id: Optional[int] = None,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None,
+    use_persona: bool = False,
+):
+    """
+    Generate a streaming response from Gemini LLM.
+    """
+    try:
+        user = await get_user(db, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Persona integration - optimized to use existing persona if available
+        if use_persona:
+            from app.services.persona_engine import PersonaEngineService
+            persona_service = PersonaEngineService(db)
+            # First try to get existing persona without regenerating
+            persona_profile = await persona_service.get_existing_persona_for_user(user)
+            if persona_profile and getattr(persona_profile, 'persona_description', None):
+                persona_system_prompt = f"You are responding as the user's financial persona: {persona_profile.persona_name}. {persona_profile.persona_description}\nKey Traits: {persona_profile.key_traits}\nLifestyle: {persona_profile.lifestyle_summary}\nFinancial Tendencies: {persona_profile.financial_tendencies}"
+                messages = [ChatMessage(role="system", content=persona_system_prompt)] + messages
+            else:
+                logger.info(f"No existing persona found for user {user_id}, will use default response")
+        
+        # Compose prompt from messages
+        prompt = "\n".join([f"{m.role}: {m.content}" for m in messages])
+        
+        # Stream the response
+        async for chunk in generate_gemini_streaming_response(prompt):
+            yield chunk
+            
+    except Exception as e:
+        logger.exception(f"Error generating streaming Gemini response: {str(e)}")
+        yield f"Error: {str(e)}"
 
 async def generate_financial_insights(
     db: AsyncSession,
