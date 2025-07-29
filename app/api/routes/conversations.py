@@ -167,6 +167,11 @@ async def chat_with_ai(
     If stream=True, response will be streamed as plain text.
     """
     conversation_id = chat_request.conversation_id
+    print(f"Chat request: {chat_request}")
+    
+    # Prepare messages for AI - include conversation history if conversation exists
+    ai_messages = chat_request.messages.copy()
+    
     # Check if conversation exists and belongs to user
     if conversation_id:
         conversation = await get_conversation(db, conversation_id=conversation_id)
@@ -174,6 +179,12 @@ async def chat_with_ai(
             raise HTTPException(status_code=404, detail="Conversation not found")
         if conversation.user_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not enough permissions")
+        
+        # Get existing conversation history and merge with new messages
+        # Only include history if the request doesn't already contain full history
+        if len(chat_request.messages) == 1:  # Only current message sent
+            existing_messages = await get_conversation_messages(db, conversation_id=conversation_id)
+            ai_messages = existing_messages + chat_request.messages
     else:
         # Create a new conversation
         title = chat_request.messages[0].content[:50] + "..." if len(chat_request.messages[0].content) > 50 else chat_request.messages[0].content
@@ -183,8 +194,10 @@ async def chat_with_ai(
             conversation_in=ConversationCreate(title=title)
         )
         conversation_id = conversation.id
+    
     # Add user message to conversation
     user_message = chat_request.messages[-1]
+    logger.info(f"Messages being sent to AI (count: {len(ai_messages)}): {[f'{m.role}: {m.content[:50]}...' for m in ai_messages]}")
     await add_message_to_conversation(
         db,
         conversation_id=conversation_id,
@@ -200,7 +213,7 @@ async def chat_with_ai(
                 db,
                 user_id=current_user.id,
                 conversation_id=conversation_id,
-                messages=chat_request.messages,
+                messages=ai_messages,
                 model_id=chat_request.model_id,
                 temperature=chat_request.temperature,
                 max_tokens=chat_request.max_tokens,
@@ -232,7 +245,7 @@ async def chat_with_ai(
             db,
             user_id=current_user.id,
             conversation_id=conversation_id,
-            messages=chat_request.messages,
+            messages=ai_messages,
             model_id=chat_request.model_id,
             temperature=chat_request.temperature,
             max_tokens=chat_request.max_tokens,
