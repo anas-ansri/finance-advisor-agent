@@ -26,6 +26,172 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+@router.get("/persona-status")
+async def get_persona_status(
+    auto_generate: bool = Query(False, description="Automatically generate persona if not found"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Check if user has an existing persona profile and return rich persona information.
+    Optionally auto-generate persona if not found.
+    """
+    try:
+        from app.services.persona_engine import PersonaEngineService
+        persona_service = PersonaEngineService(db)
+        
+        persona_profile = await persona_service.get_existing_persona_for_user(current_user)
+        
+        # If no persona and auto_generate is True, try to generate one
+        if not persona_profile and auto_generate:
+            logger.info(f"Auto-generating persona for user {current_user.id}")
+            try:
+                persona_profile = await persona_service.generate_persona_for_user(
+                    current_user, 
+                    force_regenerate=False
+                )
+            except Exception as gen_error:
+                logger.warning(f"Auto-generation failed for user {current_user.id}: {str(gen_error)}")
+                # Continue to return no-persona response
+        
+        if persona_profile:
+            cultural_profile = {}
+            if hasattr(persona_profile, 'cultural_profile') and persona_profile.cultural_profile:
+                cultural_profile = persona_profile.cultural_profile
+            
+            return {
+                "has_persona": True,
+                "persona": {
+                    "persona_name": persona_profile.persona_name,
+                    "persona_description": persona_profile.persona_description,
+                    "key_traits": persona_profile.key_traits or [],
+                    "lifestyle_summary": persona_profile.lifestyle_summary,
+                    "financial_tendencies": persona_profile.financial_tendencies,
+                    "cultural_profile": cultural_profile,
+                    "financial_advice_style": getattr(persona_profile, 'financial_advice_style', None),
+                    "created_at": persona_profile.created_at.isoformat() if persona_profile.created_at else None,
+                    "updated_at": persona_profile.updated_at.isoformat() if persona_profile.updated_at else None
+                },
+                "message": "Persona profile loaded successfully"
+            }
+        else:
+            # Check if user has transaction data for helpful messaging
+            transaction_count = await persona_service._get_transaction_count(current_user.id)
+            
+            if transaction_count == 0:
+                message = "No transaction data found. Please connect your bank account or add some transactions to generate a persona."
+            elif transaction_count < 10:
+                message = f"Found {transaction_count} transactions. Add more transaction data for a richer persona profile."
+            else:
+                message = f"Found {transaction_count} transactions. Click 'Generate My Persona' to create your financial personality profile."
+            
+            return {
+                "has_persona": False,
+                "transaction_count": transaction_count,
+                "message": message,
+                "can_generate": transaction_count >= 5  # Minimum transactions needed
+            }
+    except Exception as e:
+        logger.error(f"Error checking persona status: {str(e)}")
+        return {
+            "has_persona": False,
+            "error": "Unable to check persona status",
+            "message": "There was an error checking your persona. Please try again later.",
+            "can_generate": False
+        }
+
+
+@router.post("/generate-persona")
+async def generate_persona_for_user(
+    force_regenerate: bool = Query(False, description="Force regenerate even if persona exists"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Generate or regenerate persona for the user.
+    This can be called separately to generate persona without needing a conversation.
+    """
+    try:
+        from app.services.persona_engine import PersonaEngineService
+        persona_service = PersonaEngineService(db)
+        
+        # Check if user already has a persona and force_regenerate is False
+        if not force_regenerate:
+            existing_persona = await persona_service.get_existing_persona_for_user(current_user)
+            if existing_persona:
+                cultural_profile = {}
+                if hasattr(existing_persona, 'cultural_profile') and existing_persona.cultural_profile:
+                    cultural_profile = existing_persona.cultural_profile
+                    
+                return {
+                    "success": True,
+                    "message": "Using existing persona profile",
+                    "persona": {
+                        "persona_name": existing_persona.persona_name,
+                        "persona_description": existing_persona.persona_description,
+                        "key_traits": existing_persona.key_traits or [],
+                        "lifestyle_summary": existing_persona.lifestyle_summary,
+                        "financial_tendencies": existing_persona.financial_tendencies,
+                        "cultural_profile": cultural_profile,
+                        "financial_advice_style": getattr(existing_persona, 'financial_advice_style', None),
+                        "created_at": existing_persona.created_at.isoformat() if existing_persona.created_at else None,
+                        "updated_at": existing_persona.updated_at.isoformat() if existing_persona.updated_at else None
+                    }
+                }
+        
+        # Check if user has sufficient transaction data
+        transaction_count = await persona_service._get_transaction_count(current_user.id)
+        if transaction_count < 5:
+            return {
+                "success": False,
+                "message": f"Need at least 5 transactions to generate a persona. Found {transaction_count}. Please add more transaction data.",
+                "transaction_count": transaction_count,
+                "error_type": "insufficient_data"
+            }
+        
+        # Generate persona
+        logger.info(f"Generating persona for user {current_user.id} with {transaction_count} transactions")
+        persona_profile = await persona_service.generate_persona_for_user(
+            current_user, 
+            force_regenerate=True
+        )
+        
+        if persona_profile:
+            cultural_profile = {}
+            if hasattr(persona_profile, 'cultural_profile') and persona_profile.cultural_profile:
+                cultural_profile = persona_profile.cultural_profile
+                
+            return {
+                "success": True,
+                "message": "Persona generated successfully",
+                "persona": {
+                    "persona_name": persona_profile.persona_name,
+                    "persona_description": persona_profile.persona_description,
+                    "key_traits": persona_profile.key_traits or [],
+                    "lifestyle_summary": persona_profile.lifestyle_summary,
+                    "financial_tendencies": persona_profile.financial_tendencies,
+                    "cultural_profile": cultural_profile,
+                    "financial_advice_style": getattr(persona_profile, 'financial_advice_style', None),
+                    "created_at": persona_profile.created_at.isoformat() if persona_profile.created_at else None,
+                    "updated_at": persona_profile.updated_at.isoformat() if persona_profile.updated_at else None
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Failed to generate persona. This could be due to insufficient transaction variety or API limitations.",
+                "error_type": "generation_failed",
+                "transaction_count": transaction_count
+            }
+    except Exception as e:
+        logger.error(f"Error generating persona for user {current_user.id}: {str(e)}")
+        return {
+            "success": False,
+            "message": f"An error occurred while generating your persona: {str(e)}",
+            "error_type": "system_error"
+        }
+
+
 @router.post("", response_model=Conversation)
 async def create_new_conversation(
     conversation_in: ConversationCreate,
@@ -309,38 +475,4 @@ async def generate_persona_for_conversation(
         raise HTTPException(
             status_code=500, 
             detail=f"Error generating persona: {str(e)}"
-        )
-
-
-@router.get("/persona-status")
-async def get_persona_status(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Check if user has an existing persona profile.
-    """
-    try:
-        from app.services.persona_engine import PersonaEngineService
-        persona_service = PersonaEngineService(db)
-        
-        persona_profile = await persona_service.get_existing_persona_for_user(current_user)
-        
-        if persona_profile:
-            return {
-                "has_persona": True,
-                "persona_name": persona_profile.persona_name,
-                "created_at": persona_profile.created_at,
-                "updated_at": persona_profile.updated_at
-            }
-        else:
-            return {
-                "has_persona": False,
-                "message": "No persona profile found. Enable persona in chat to generate one."
-            }
-    except Exception as e:
-        logger.error(f"Error checking persona status: {str(e)}")
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Error checking persona status: {str(e)}"
         )

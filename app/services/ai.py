@@ -86,15 +86,53 @@ async def generate_ai_response(
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
-        # Persona integration - optimized to use existing persona if available
+        # Persona integration - enhanced with cultural context
         if use_persona:
             from app.services.persona_engine import PersonaEngineService
             persona_service = PersonaEngineService(db)
             # First try to get existing persona without regenerating
             persona_profile = await persona_service.get_existing_persona_for_user(user)
-            if persona_profile and getattr(persona_profile, 'persona_description', None):
-                persona_system_prompt = f"You are responding as the user's financial persona: {persona_profile.persona_name}. {persona_profile.persona_description}\nKey Traits: {persona_profile.key_traits}\nLifestyle: {persona_profile.lifestyle_summary}\nFinancial Tendencies: {persona_profile.financial_tendencies}"
+            if persona_profile:
+                # Create a rich system prompt that incorporates the persona's cultural context
+                cultural_context = ""
+                if hasattr(persona_profile, 'cultural_profile') and persona_profile.cultural_profile:
+                    cultural_context = f"""
+Cultural Context:
+- Music Taste: {persona_profile.cultural_profile.get('music_taste', 'Not specified')}
+- Entertainment Style: {persona_profile.cultural_profile.get('entertainment_style', 'Not specified')}
+- Fashion Sensibility: {persona_profile.cultural_profile.get('fashion_sensibility', 'Not specified')}
+- Dining Philosophy: {persona_profile.cultural_profile.get('dining_philosophy', 'Not specified')}"""
+                
+                advice_style = ""
+                if hasattr(persona_profile, 'financial_advice_style') and persona_profile.financial_advice_style:
+                    advice_style = f"\nAdvice Style: {persona_profile.financial_advice_style}"
+                
+                persona_system_prompt = f"""You are a deeply personalized AI financial advisor responding to someone with this persona:
+
+PERSONA: {persona_profile.persona_name}
+
+DESCRIPTION: {persona_profile.persona_description}
+
+KEY TRAITS: {', '.join(persona_profile.key_traits) if persona_profile.key_traits else 'To be determined'}
+
+LIFESTYLE: {persona_profile.lifestyle_summary}
+
+FINANCIAL TENDENCIES: {persona_profile.financial_tendencies}
+{cultural_context}
+{advice_style}
+
+IMPORTANT INSTRUCTIONS:
+1. Respond as if you truly understand this person's values, lifestyle, and cultural preferences
+2. Reference their specific traits and interests when relevant to financial advice
+3. Use language and examples that resonate with their cultural context
+4. Make recommendations that align with their lifestyle and values
+5. Acknowledge their unique perspective on money and spending
+6. Be supportive and understanding of their financial journey
+
+When providing advice, consider how their cultural interests and lifestyle choices influence their financial priorities. Make connections between their spending patterns and their identity when appropriate."""
+                
                 messages = [ChatMessage(role="system", content=persona_system_prompt)] + messages
+                logger.info(f"Using enhanced persona context for user {user_id}: {persona_profile.persona_name}")
             else:
                 logger.info(f"No existing persona found for user {user_id}, will use default response")
         
@@ -123,17 +161,55 @@ async def generate_ai_streaming_response(
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
-        # Persona integration - optimized to use existing persona if available
+        # Persona integration - enhanced with cultural context
         if use_persona:
             from app.services.persona_engine import PersonaEngineService
             persona_service = PersonaEngineService(db)
             # First try to get existing persona without regenerating
             persona_profile = await persona_service.get_existing_persona_for_user(user)
-            if persona_profile and getattr(persona_profile, 'persona_description', None):
-                persona_system_prompt = f"You are responding as the user's financial persona: {persona_profile.persona_name}. {persona_profile.persona_description}\nKey Traits: {persona_profile.key_traits}\nLifestyle: {persona_profile.lifestyle_summary}\nFinancial Tendencies: {persona_profile.financial_tendencies}"
+            if persona_profile:
+                # Create a rich system prompt that incorporates the persona's cultural context
+                cultural_context = ""
+                if hasattr(persona_profile, 'cultural_profile') and persona_profile.cultural_profile:
+                    cultural_context = f"""
+Cultural Context:
+- Music Taste: {persona_profile.cultural_profile.get('music_taste', 'Not specified')}
+- Entertainment Style: {persona_profile.cultural_profile.get('entertainment_style', 'Not specified')}
+- Fashion Sensibility: {persona_profile.cultural_profile.get('fashion_sensibility', 'Not specified')}
+- Dining Philosophy: {persona_profile.cultural_profile.get('dining_philosophy', 'Not specified')}"""
+                
+                advice_style = ""
+                if hasattr(persona_profile, 'financial_advice_style') and persona_profile.financial_advice_style:
+                    advice_style = f"\nAdvice Style: {persona_profile.financial_advice_style}"
+                
+                persona_system_prompt = f"""You are a deeply personalized AI financial advisor responding to someone with this persona:
+
+PERSONA: {persona_profile.persona_name}
+
+DESCRIPTION: {persona_profile.persona_description}
+
+KEY TRAITS: {', '.join(persona_profile.key_traits) if persona_profile.key_traits else 'To be determined'}
+
+LIFESTYLE: {persona_profile.lifestyle_summary}
+
+FINANCIAL TENDENCIES: {persona_profile.financial_tendencies}
+{cultural_context}
+{advice_style}
+
+IMPORTANT INSTRUCTIONS:
+1. Respond as if you truly understand this person's values, lifestyle, and cultural preferences
+2. Reference their specific traits and interests when relevant to financial advice
+3. Use language and examples that resonate with their cultural context
+4. Make recommendations that align with their lifestyle and values
+5. Acknowledge their unique perspective on money and spending
+6. Be supportive and understanding of their financial journey
+
+When providing advice, consider how their cultural interests and lifestyle choices influence their financial priorities. Make connections between their spending patterns and their identity when appropriate."""
+                
                 messages = [ChatMessage(role="system", content=persona_system_prompt)] + messages
+                logger.info(f"Using enhanced persona context for streaming user {user_id}: {persona_profile.persona_name}")
             else:
-                logger.info(f"No existing persona found for user {user_id}, will use default response")
+                logger.info(f"No existing persona found for streaming user {user_id}, will use default response")
         
         # Compose prompt from messages
         prompt = "\n".join([f"{m.role}: {m.content}" for m in messages])
