@@ -234,11 +234,14 @@ async def chat_with_ai(
             except Exception as e:
                 logger.error(f"Error saving streamed response to conversation: {str(e)}")
         
-        # Stream the AI response as plain text 
-        return StreamingResponse(
+        # Stream the AI response as plain text with conversation ID in headers
+        response = StreamingResponse(
             stream_and_collect(),
             media_type="text/plain"
         )
+        # Add conversation ID to response headers so frontend can access it
+        response.headers["X-Conversation-ID"] = str(conversation_id)
+        return response
     else:
         # Generate AI response as before
         ai_response = await generate_ai_response(
