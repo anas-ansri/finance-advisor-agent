@@ -24,7 +24,6 @@ from app.models.ai_insight import AIInsight
 from app.schemas.ai_insight import AIInsightCreate
 from app.services.transaction import get_all_transactions
 from app.models.bank_transaction import BankTransaction
-import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
 
@@ -39,33 +38,44 @@ class FinancialInsights(BaseModel):
     """Model for a list of financial insights."""
     insights: List[FinancialInsight] = Field(..., min_items=5, max_items=7, description="List of financial insights")
 
-# Utility to call Gemini LLM
-async def generate_gemini_response(prompt: str) -> str:
+# Utility to call OpenAI LLM
+async def generate_openai_response(prompt: str) -> str:
     try:
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        llm = genai.GenerativeModel('gemini-1.5-flash')
-        response = llm.generate_content(prompt)
-        response_text = response.text.strip().replace("```json", "").replace("```", "")
-        return response_text
+        print("Generating OpenAI response...")
+        logger.info(f"Open AI key: {settings.OPENAI_API_KEY}")
+        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        response = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=2000
+        )
+        return response.choices[0].message.content.strip()
     except Exception as e:
-        logger.error(f"Gemini API error: {e}")
-        raise HTTPException(status_code=500, detail=f"Gemini API error: {e}")
+        logger.error(f"OpenAI API error: {e}")
+        raise HTTPException(status_code=500, detail=f"OpenAI API error: {e}")
 
-# Streaming utility for Gemini LLM
-async def generate_gemini_streaming_response(prompt: str):
+# Streaming utility for OpenAI LLM
+async def generate_openai_streaming_response(prompt: str):
     """
-    Generate streaming response from Gemini LLM.
+    Generate streaming response from OpenAI LLM.
     """
     try:
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        llm = genai.GenerativeModel('gemini-1.5-flash')
-        response = llm.generate_content(prompt, stream=True)
+        print("Generating OpenAI response...")
+        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        stream = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=2000,
+            stream=True
+        )
         
-        for chunk in response:
-            if chunk.text:
-                yield chunk.text
+        async for chunk in stream:
+            if chunk.choices[0].delta.content is not None:
+                yield chunk.choices[0].delta.content
     except Exception as e:
-        logger.error(f"Gemini streaming API error: {e}")
+        logger.error(f"OpenAI streaming API error: {e}")
         yield f"Error: {str(e)}"
 
 async def generate_ai_response(
@@ -79,78 +89,131 @@ async def generate_ai_response(
     use_persona: bool = False,
 ) -> str:
     """
-    Generate a response from Gemini LLM.
+    Generate a response from OpenAI LLM.
     """
     try:
         user = await get_user(db, user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
-        # Persona integration - optimized to use existing persona if available
-        if use_persona:
-            from app.services.persona_engine import PersonaEngineService
-            persona_service = PersonaEngineService(db)
-            # First try to get existing persona without regenerating
-            persona_profile = await persona_service.get_existing_persona_for_user(user)
-            if persona_profile and getattr(persona_profile, 'persona_description', None):
-                persona_system_prompt = f"You are responding as the user's financial persona: {persona_profile.persona_name}. {persona_profile.persona_description}\nKey Traits: {persona_profile.key_traits}\nLifestyle: {persona_profile.lifestyle_summary}\nFinancial Tendencies: {persona_profile.financial_tendencies}"
-                messages = [ChatMessage(role="system", content=persona_system_prompt)] + messages
-            else:
-                logger.info(f"No existing persona found for user {user_id}, will use default response")
-        
-        # Compose prompt from messages
-        prompt = "\n".join([f"{m.role}: {m.content}" for m in messages])
-        return await generate_gemini_response(prompt)
-    except Exception as e:
-        logger.exception(f"Error generating Gemini response: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error generating Gemini response: {str(e)}")
+        user_name = ""
+        if user.first_name:
+            user_name = user.first_name
+        elif user.email:
+            # Fallback to email username if no first name
+            user_name = user.email.split('@')[0].replace('.', ' ').replace('_', ' ').title()
+        # Basic user profile context (always included)
+        user_profile_context = f"""
+USER PROFILE:
+- First Name: {user.first_name or 'Not provided'}
+- Email: {user.email or 'Not provided'}"""
 
-async def generate_ai_streaming_response(
-    db: AsyncSession,
-    user_id: UUID,
-    conversation_id: UUID,
-    messages: List[ChatMessage],
-    model_id: Optional[int] = None,
-    temperature: Optional[float] = None,
-    max_tokens: Optional[int] = None,
-    use_persona: bool = False,
-):
-    """
-    Generate a streaming response from Gemini LLM.
-    """
-    try:
-        user = await get_user(db, user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        # Persona integration - optimized to use existing persona if available
+        # Add additional profile information if available
+        if user.monthly_income:
+            user_profile_context += f"\n- Monthly Income: {user.monthly_income}"
+        if user.employment_status:
+            user_profile_context += f"\n- Employment Status: {user.employment_status}"
+        if user.primary_financial_goal:
+            user_profile_context += f"\n- Primary Financial Goal: {user.primary_financial_goal}"
+        if user.risk_tolerance:
+            user_profile_context += f"\n- Risk Tolerance: {user.risk_tolerance}"
+
+        # Persona integration - enhanced with cultural context
         if use_persona:
             from app.services.persona_engine import PersonaEngineService
             persona_service = PersonaEngineService(db)
             # First try to get existing persona without regenerating
             persona_profile = await persona_service.get_existing_persona_for_user(user)
-            if persona_profile and getattr(persona_profile, 'persona_description', None):
-                persona_system_prompt = f"You are responding as the user's financial persona: {persona_profile.persona_name}. {persona_profile.persona_description}\nKey Traits: {persona_profile.key_traits}\nLifestyle: {persona_profile.lifestyle_summary}\nFinancial Tendencies: {persona_profile.financial_tendencies}"
+            if persona_profile:
+                # Create a rich system prompt that incorporates the persona's cultural context
+                cultural_context = ""
+                if hasattr(persona_profile, 'cultural_profile') and persona_profile.cultural_profile:
+                    cultural_context = f"""
+Cultural Context:
+- Music Taste: {persona_profile.cultural_profile.get('music_taste', 'Not specified')}
+- Entertainment Style: {persona_profile.cultural_profile.get('entertainment_style', 'Not specified')}
+- Fashion Sensibility: {persona_profile.cultural_profile.get('fashion_sensibility', 'Not specified')}
+- Dining Philosophy: {persona_profile.cultural_profile.get('dining_philosophy', 'Not specified')}"""
+                
+                advice_style = ""
+                if hasattr(persona_profile, 'financial_advice_style') and persona_profile.financial_advice_style:
+                    advice_style = f"\nAdvice Style: {persona_profile.financial_advice_style}"
+                
+                persona_system_prompt = f"""You are a deeply personalized AI financial advisor responding to {user_name or 'the user'}. Use their name naturally in conversation.
+
+{user_profile_context}
+
+PERSONA: {persona_profile.persona_name}
+
+DESCRIPTION: {persona_profile.persona_description}
+
+KEY TRAITS: {', '.join(persona_profile.key_traits) if persona_profile.key_traits else 'To be determined'}
+
+LIFESTYLE: {persona_profile.lifestyle_summary}
+
+FINANCIAL TENDENCIES: {persona_profile.financial_tendencies}
+{cultural_context}
+{advice_style}
+
+IMPORTANT INSTRUCTIONS:
+1. Address the user by name ({user_name or 'their name'}) naturally in conversation
+2. Respond as if you truly understand this person's values, lifestyle, and cultural preferences
+3. Reference their specific traits and interests when relevant to financial advice
+4. Use language and examples that resonate with their cultural context
+5. Make recommendations that align with their lifestyle and values
+6. Acknowledge their unique perspective on money and spending
+7. Be supportive and understanding of their financial journey
+
+When providing advice, consider how their cultural interests and lifestyle choices influence their financial priorities. Make connections between their spending patterns and their identity when appropriate."""
+                
                 messages = [ChatMessage(role="system", content=persona_system_prompt)] + messages
+                logger.info(f"Using enhanced persona context for user {user_id}: {persona_profile.persona_name}")
             else:
-                logger.info(f"No existing persona found for user {user_id}, will use default response")
+                # Persona requested but not available - still use basic profile
+                basic_system_prompt = f"""You are a helpful AI financial advisor for {user_name or 'the user'}. Use their name naturally in conversation.
+
+{user_profile_context}
+
+INSTRUCTIONS:
+1. Address the user by name ({user_name or 'their name'}) naturally in conversation
+2. Provide personalized financial advice based on their profile information
+3. Be supportive, understanding, and professional
+4. Ask clarifying questions when you need more information
+5. Tailor your advice to their financial goals and risk tolerance"""
+                
+                messages = [ChatMessage(role="system", content=basic_system_prompt)] + messages
+                logger.info(f"No persona found for user {user_id}, using basic profile context")
+        else:
+            # No persona requested - use basic user profile context
+            basic_system_prompt = f"""You are a helpful AI financial advisor for {user_name or 'the user'}. Use their name naturally in conversation.
+
+{user_profile_context}
+
+INSTRUCTIONS:
+1. Provide personalized financial advice based on their profile information
+2. Be supportive, understanding, and professional
+3. Ask clarifying questions when you need more information
+4. Tailor your advice to their financial goals and risk tolerance"""
+            
+            messages = [ChatMessage(role="system", content=basic_system_prompt)] + messages
+            logger.info(f"Using basic user profile context for user {user_id}: {user_name}")
         
         # Compose prompt from messages
         prompt = "\n".join([f"{m.role}: {m.content}" for m in messages])
-        
-        # Stream the response
-        async for chunk in generate_gemini_streaming_response(prompt):
-            yield chunk
-            
+        return await generate_openai_response(prompt)
     except Exception as e:
-        logger.exception(f"Error generating streaming Gemini response: {str(e)}")
-        yield f"Error: {str(e)}"
+        logger.exception(f"Error generating OpenAI response: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating OpenAI response: {str(e)}")
+
+# Note: generate_ai_streaming_response function has been refactored into the API layer
+# to avoid database connection leaks in streaming responses. The logic is now handled
+# directly in the conversations.py route with proper session management.
 
 async def generate_financial_insights(
     db: AsyncSession,
     user_id: UUID,
 ):
-    """Generates AI-powered financial insights for the user using Gemini."""
+    """Generates AI-powered financial insights for the user using OpenAI."""
     print(f"Generating insights for user: {user_id}")
 
     # Fetch all transactions for the user with category eagerly loaded

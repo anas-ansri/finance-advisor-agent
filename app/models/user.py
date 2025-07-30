@@ -30,6 +30,7 @@ class User(Base):
     preferred_categorization_model = Column(String, server_default="gpt35")
     first_name = Column(String)
     last_name = Column(String)
+    phone_number = Column(String)  # For MCP integration
     date_of_birth = Column(Date)
     monthly_income = Column(Numeric)
     employment_status = Column(String)
@@ -57,4 +58,5 @@ class User(Base):
 # Import at the bottom to avoid circular imports
 from app.models.conversation import Conversation
 from app.models.bank_statement import BankStatement
+from app.models.persona_profile import PersonaProfile
 

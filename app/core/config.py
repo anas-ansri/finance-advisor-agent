@@ -48,6 +48,25 @@ class Settings(BaseSettings):
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://anas@localhost:5432/finance_advisor")
     TEST_DATABASE_URL: str = os.getenv("TEST_DATABASE_URL", "postgresql+asyncpg://anas@localhost:5432/finance_advisor_test")
     
+    # MCP Integration settings
+    MCP_SERVER_URL: str = os.getenv("MCP_SERVER_URL", "http://localhost:8080")
+    MCP_DEFAULT_PHONE: str = os.getenv("MCP_DEFAULT_PHONE", "2222222222")  # Test phone number
+    
+    # Enhanced AI settings
+    ANTHROPIC_API_KEY: Optional[str] = os.getenv("ANTHROPIC_API_KEY")
+    COHERE_API_KEY: Optional[str] = os.getenv("COHERE_API_KEY")
+    HUGGINGFACE_API_KEY: Optional[str] = os.getenv("HUGGINGFACE_API_KEY")
+    
+    # AI Model preferences
+    DEFAULT_AI_MODEL: str = os.getenv("DEFAULT_AI_MODEL", "gpt4")
+    CONVERSATION_MEMORY_LIMIT: int = int(os.getenv("CONVERSATION_MEMORY_LIMIT", "20"))
+    MAX_CONTEXT_LENGTH: int = int(os.getenv("MAX_CONTEXT_LENGTH", "8000"))
+    
+    # Performance settings
+    ENABLE_MCP_CACHE: bool = os.getenv("ENABLE_MCP_CACHE", "true").lower() == "true"
+    MCP_CACHE_TTL: int = int(os.getenv("MCP_CACHE_TTL", "300"))  # 5 minutes
+    ENABLE_RESPONSE_STREAMING: bool = os.getenv("ENABLE_RESPONSE_STREAMING", "true").lower() == "true"
+    
     # Logging settings
     LOG_LEVEL: str = "INFO"
     
