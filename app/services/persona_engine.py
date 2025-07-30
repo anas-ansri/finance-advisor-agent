@@ -551,17 +551,82 @@ class PersonaEngineService:
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def generate_persona_for_user(self, user: User, force_regenerate: bool = False) -> Optional[PersonaProfile]:
+    async def generate_persona_for_user(self, user: User, force_regenerate: bool = False, user_preferences=None) -> Optional[PersonaProfile]:
         """
         The main orchestration method to generate a Persona Profile for a given user.
+        Can use transaction data or user-provided preferences.
         """
         # Check if persona already exists and force_regenerate is False
-        if not force_regenerate:
+        if not force_regenerate and not user_preferences:
             existing_profile = await self.get_existing_persona_for_user(user)
             if existing_profile:
                 logger.info(f"Using existing persona profile for user {user.id}")
                 return existing_profile
 
+        # If user preferences provided, use preference-based generation
+        if user_preferences:
+            return await self._generate_persona_with_preferences(user, user_preferences)
+        
+        # Otherwise use transaction-based generation
+        return await self._generate_persona_from_transactions(user)
+
+    async def _generate_persona_with_preferences(self, user: User, user_preferences):
+        """
+        Generate persona using user-provided preferences.
+        """
+        try:
+            logger.info(f"Generating persona with custom preferences for user {user.id}")
+            
+            # Create cultural data from user preferences
+            cultural_data = {
+                "input_preferences": {
+                    "favorite_brands": user_preferences.favorite_brands or [],
+                    "favorite_music_genres": user_preferences.favorite_music_genres or [],
+                    "favorite_movies": user_preferences.favorite_movies or [],
+                    "favorite_cuisines": user_preferences.favorite_cuisines or [],
+                    "lifestyle_preferences": user_preferences.lifestyle_preferences or [],
+                    "financial_goals": user_preferences.financial_goals or [],
+                    "additional_notes": user_preferences.additional_notes or ""
+                },
+                "taste_analysis": {
+                    "entity_categories": {
+                        "brands": [{"name": brand, "source": "user_preference"} for brand in (user_preferences.favorite_brands or [])],
+                        "music": [{"name": genre, "source": "user_preference"} for genre in (user_preferences.favorite_music_genres or [])],
+                        "entertainment": [{"name": movie, "source": "user_preference"} for movie in (user_preferences.favorite_movies or [])],
+                        "dining": [{"name": cuisine, "source": "user_preference"} for cuisine in (user_preferences.favorite_cuisines or [])]
+                    },
+                    "correlated_interests": {
+                        "music": user_preferences.favorite_music_genres or ["Contemporary", "Popular"],
+                        "film": user_preferences.favorite_movies or ["Popular Cinema"],
+                        "food": user_preferences.favorite_cuisines or ["International Cuisine"],
+                        "lifestyle": user_preferences.lifestyle_preferences or ["Modern Living"]
+                    },
+                    "personality_indicators": self._extract_personality_from_preferences(user_preferences),
+                    "financial_goals": user_preferences.financial_goals or []
+                },
+                "data_source": "user_preferences",
+                "additional_context": user_preferences.additional_notes or ""
+            }
+            
+            # Generate persona prompt with preference data
+            prompt = self._generate_persona_prompt_with_preferences(cultural_data)
+            persona_data = self._call_gemini_api(prompt)
+            
+            if not persona_data:
+                logger.error(f"Could not generate Persona for user {user.id}: Gemini API call failed.")
+                return None
+
+            profile = await self._save_persona_profile(user, persona_data, cultural_data)
+            return profile
+            
+        except Exception as e:
+            logger.error(f"Error generating persona with preferences for user {user.id}: {str(e)}")
+            return None
+
+    async def _generate_persona_from_transactions(self, user: User):
+        """
+        Generate persona using transaction data (original method).
+        """
         entities = await self._get_transaction_entities(user)  # Add await
         if not entities:
             logger.warning(f"Could not generate Persona for user {user.id}: No transaction entities found.")
@@ -644,4 +709,83 @@ class PersonaEngineService:
         except Exception as e:
             logger.error(f"Error getting transaction count for user {user_id}: {str(e)}")
             return 0
+
+    def _extract_personality_from_preferences(self, user_preferences):
+        """
+        Extract personality indicators from user preferences.
+        """
+        indicators = []
+        
+        # Analyze music preferences
+        music_genres = user_preferences.favorite_music_genres or []
+        if any(genre.lower() in ['jazz', 'classical', 'blues'] for genre in music_genres):
+            indicators.append("Sophisticated Taste")
+        if any(genre.lower() in ['rock', 'metal', 'punk'] for genre in music_genres):
+            indicators.append("Bold & Energetic")
+        if any(genre.lower() in ['indie', 'alternative', 'folk'] for genre in music_genres):
+            indicators.append("Independent Spirit")
+        
+        # Analyze lifestyle preferences
+        lifestyle_prefs = user_preferences.lifestyle_preferences or []
+        if any(pref.lower() in ['fitness', 'health', 'wellness'] for pref in lifestyle_prefs):
+            indicators.append("Health-Conscious")
+        if any(pref.lower() in ['travel', 'adventure', 'exploration'] for pref in lifestyle_prefs):
+            indicators.append("Adventure-Seeking")
+        if any(pref.lower() in ['reading', 'learning', 'education'] for pref in lifestyle_prefs):
+            indicators.append("Knowledge-Oriented")
+        
+        # Analyze financial goals
+        financial_goals = user_preferences.financial_goals or []
+        if any(goal.lower() in ['save', 'saving', 'emergency fund'] for goal in financial_goals):
+            indicators.append("Security-Focused")
+        if any(goal.lower() in ['invest', 'wealth', 'retire early'] for goal in financial_goals):
+            indicators.append("Future-Oriented")
+        if any(goal.lower() in ['travel', 'experience', 'lifestyle'] for goal in financial_goals):
+            indicators.append("Experience-Valued")
+        
+        return indicators if indicators else ["Personalized", "Thoughtful", "Goal-Oriented"]
+
+    def _generate_persona_prompt_with_preferences(self, cultural_data):
+        """
+        Generate a persona prompt using user preferences instead of transaction data.
+        """
+        preferences = cultural_data.get("input_preferences", {})
+        
+        prompt = f"""
+You are an expert financial persona analyst. Create a comprehensive financial personality profile based on the user's stated preferences and interests.
+
+USER PREFERENCES:
+- Favorite Brands: {', '.join(preferences.get('favorite_brands', []))}
+- Music Preferences: {', '.join(preferences.get('favorite_music_genres', []))}
+- Favorite Movies/Shows: {', '.join(preferences.get('favorite_movies', []))}
+- Favorite Cuisines: {', '.join(preferences.get('favorite_cuisines', []))}
+- Lifestyle Interests: {', '.join(preferences.get('lifestyle_preferences', []))}
+- Financial Goals: {', '.join(preferences.get('financial_goals', []))}
+- Additional Notes: {preferences.get('additional_notes', 'None provided')}
+
+CULTURAL CONTEXT:
+{json.dumps(cultural_data.get('taste_analysis', {}), indent=2)}
+
+Create a detailed financial persona profile with the following structure:
+
+{{
+    "persona_name": "A creative, evocative name that captures their essence (e.g., 'The Mindful Curator', 'The Adventure Investor')",
+    "persona_description": "A rich 2-3 sentence description that weaves together their cultural identity, values, and financial approach based on their stated preferences",
+    "key_traits": ["3-5 personality traits derived from their preferences"],
+    "lifestyle_summary": "A detailed paragraph about their daily life, values, and how they prioritize experiences based on their stated interests",
+    "financial_tendencies": "A comprehensive paragraph about their money mindset, spending philosophy, and financial decision-making style that aligns with their preferences and goals",
+    "cultural_profile": {{
+        "music_taste": "Description of their music preferences and what it reveals about their personality",
+        "entertainment_style": "Analysis of their entertainment choices and cultural engagement",
+        "fashion_sensibility": "Inferred fashion and style preferences based on their overall profile",
+        "dining_philosophy": "Their approach to food and dining experiences based on cuisine preferences"
+    }},
+    "financial_advice_style": "How they prefer to receive financial guidance (e.g., 'Direct and data-driven', 'Collaborative and values-based')"
+}}
+
+Focus on creating a cohesive personality that honors their stated preferences while providing insightful financial personality analysis. Make it feel authentic and personalized to their specific interests and goals.
+
+Return only the JSON object, no additional text.
+"""
+        return prompt
 

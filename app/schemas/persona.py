@@ -3,6 +3,20 @@ from typing import Optional, List, Dict, Any
 import uuid
 from datetime import datetime
 
+# User preferences for persona customization
+class UserPreferences(BaseModel):
+    favorite_brands: Optional[List[str]] = []
+    favorite_music_genres: Optional[List[str]] = []
+    favorite_movies: Optional[List[str]] = []
+    favorite_cuisines: Optional[List[str]] = []
+    lifestyle_preferences: Optional[List[str]] = []
+    financial_goals: Optional[List[str]] = []
+    additional_notes: Optional[str] = None
+
+# Schema for persona generation request
+class PersonaGenerationRequest(BaseModel):
+    user_preferences: Optional[UserPreferences] = None
+
 # Cultural profile sub-schema
 class CulturalProfile(BaseModel):
     music_taste: str

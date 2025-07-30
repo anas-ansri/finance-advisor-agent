@@ -57,4 +57,5 @@ class User(Base):
 # Import at the bottom to avoid circular imports
 from app.models.conversation import Conversation
 from app.models.bank_statement import BankStatement
+from app.models.persona_profile import PersonaProfile
 
