@@ -24,7 +24,6 @@ from app.models.ai_insight import AIInsight
 from app.schemas.ai_insight import AIInsightCreate
 from app.services.transaction import get_all_transactions
 from app.models.bank_transaction import BankTransaction
-import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
 
@@ -39,33 +38,44 @@ class FinancialInsights(BaseModel):
     """Model for a list of financial insights."""
     insights: List[FinancialInsight] = Field(..., min_items=5, max_items=7, description="List of financial insights")
 
-# Utility to call Gemini LLM
-async def generate_gemini_response(prompt: str) -> str:
+# Utility to call OpenAI LLM
+async def generate_openai_response(prompt: str) -> str:
     try:
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        llm = genai.GenerativeModel('gemini-1.5-flash')
-        response = llm.generate_content(prompt)
-        response_text = response.text.strip().replace("```json", "").replace("```", "")
-        return response_text
+        print("Generating OpenAI response...")
+        logger.info(f"Open AI key: {settings.OPENAI_API_KEY}")
+        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        response = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=2000
+        )
+        return response.choices[0].message.content.strip()
     except Exception as e:
-        logger.error(f"Gemini API error: {e}")
-        raise HTTPException(status_code=500, detail=f"Gemini API error: {e}")
+        logger.error(f"OpenAI API error: {e}")
+        raise HTTPException(status_code=500, detail=f"OpenAI API error: {e}")
 
-# Streaming utility for Gemini LLM
-async def generate_gemini_streaming_response(prompt: str):
+# Streaming utility for OpenAI LLM
+async def generate_openai_streaming_response(prompt: str):
     """
-    Generate streaming response from Gemini LLM.
+    Generate streaming response from OpenAI LLM.
     """
     try:
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        llm = genai.GenerativeModel('gemini-1.5-flash')
-        response = llm.generate_content(prompt, stream=True)
+        print("Generating OpenAI response...")
+        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        stream = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=2000,
+            stream=True
+        )
         
-        for chunk in response:
-            if chunk.text:
-                yield chunk.text
+        async for chunk in stream:
+            if chunk.choices[0].delta.content is not None:
+                yield chunk.choices[0].delta.content
     except Exception as e:
-        logger.error(f"Gemini streaming API error: {e}")
+        logger.error(f"OpenAI streaming API error: {e}")
         yield f"Error: {str(e)}"
 
 async def generate_ai_response(
@@ -79,29 +89,25 @@ async def generate_ai_response(
     use_persona: bool = False,
 ) -> str:
     """
-    Generate a response from Gemini LLM.
+    Generate a response from OpenAI LLM.
     """
     try:
         user = await get_user(db, user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
-        # Create basic user profile context that's always available
         user_name = ""
         if user.first_name:
             user_name = user.first_name
-            if user.last_name:
-                user_name += f" {user.last_name}"
         elif user.email:
             # Fallback to email username if no first name
             user_name = user.email.split('@')[0].replace('.', ' ').replace('_', ' ').title()
-        
         # Basic user profile context (always included)
         user_profile_context = f"""
 USER PROFILE:
-- Name: {user_name or 'User'}
-- Email: {user.email}"""
-        
+- First Name: {user.first_name or 'Not provided'}
+- Email: {user.email or 'Not provided'}"""
+
         # Add additional profile information if available
         if user.monthly_income:
             user_profile_context += f"\n- Monthly Income: {user.monthly_income}"
@@ -184,21 +190,20 @@ INSTRUCTIONS:
 {user_profile_context}
 
 INSTRUCTIONS:
-1. Address the user by name ({user_name or 'their name'}) naturally in conversation
-2. Provide personalized financial advice based on their profile information
-3. Be supportive, understanding, and professional
-4. Ask clarifying questions when you need more information
-5. Tailor your advice to their financial goals and risk tolerance"""
+1. Provide personalized financial advice based on their profile information
+2. Be supportive, understanding, and professional
+3. Ask clarifying questions when you need more information
+4. Tailor your advice to their financial goals and risk tolerance"""
             
             messages = [ChatMessage(role="system", content=basic_system_prompt)] + messages
             logger.info(f"Using basic user profile context for user {user_id}: {user_name}")
         
         # Compose prompt from messages
         prompt = "\n".join([f"{m.role}: {m.content}" for m in messages])
-        return await generate_gemini_response(prompt)
+        return await generate_openai_response(prompt)
     except Exception as e:
-        logger.exception(f"Error generating Gemini response: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error generating Gemini response: {str(e)}")
+        logger.exception(f"Error generating OpenAI response: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating OpenAI response: {str(e)}")
 
 # Note: generate_ai_streaming_response function has been refactored into the API layer
 # to avoid database connection leaks in streaming responses. The logic is now handled
@@ -208,7 +213,7 @@ async def generate_financial_insights(
     db: AsyncSession,
     user_id: UUID,
 ):
-    """Generates AI-powered financial insights for the user using Gemini."""
+    """Generates AI-powered financial insights for the user using OpenAI."""
     print(f"Generating insights for user: {user_id}")
 
     # Fetch all transactions for the user with category eagerly loaded

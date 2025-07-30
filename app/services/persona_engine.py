@@ -1,5 +1,5 @@
 import httpx
-import google.generativeai as genai
+from openai import AsyncOpenAI
 import logging
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession  # Add this import
@@ -23,13 +23,13 @@ class PersonaEngineService:
 
     def __init__(self, db: AsyncSession):  # Change to AsyncSession
         self.db = db
-        # Configure the Gemini API client
+        # Configure OpenAI client
         try:
-            genai.configure(api_key=settings.GEMINI_API_KEY)
-            self.llm = genai.GenerativeModel('gemini-1.5-flash')
+            self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+            logger.info("OpenAI client configured successfully")
         except Exception as e:
-            logger.error(f"Failed to configure Gemini API: {e}")
-            self.llm = None
+            logger.error(f"Failed to configure OpenAI client: {e}")
+            self.client = None
 
     async def _get_transaction_entities(self, user: User) -> List[str]:
         """
@@ -396,7 +396,7 @@ class PersonaEngineService:
 
     def _generate_persona_prompt(self, qloo_data: Dict[str, Any]) -> str:
         """
-        Creates a detailed prompt for the Gemini LLM to generate a rich, culturally-aware persona.
+        Creates a detailed prompt for the OpenAI LLM to generate a rich, culturally-aware persona.
         Uses Qloo's cultural mapping to create deeper, more nuanced financial profiles.
         """
         prompt = f"""
@@ -443,16 +443,21 @@ class PersonaEngineService:
         """
         return prompt
 
-    def _call_gemini_api(self, prompt: str) -> Optional[Dict[str, Any]]:
+    async def _call_openai_api(self, prompt: str) -> Optional[Dict[str, Any]]:
         """
-        Calls the Gemini API and validates the rich persona JSON response.
+        Calls the OpenAI API and validates the rich persona JSON response.
         """
-        if not self.llm:
-            logger.error("Gemini model not initialized.")
+        if not self.client:
+            logger.error("OpenAI client not initialized.")
             return None
         try:
-            response = self.llm.generate_content(prompt)
-            response_text = response.text.strip().replace("```json", "").replace("```", "")
+            response = await self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=2000
+            )
+            response_text = response.choices[0].message.content.strip().replace("```json", "").replace("```", "")
             
             persona_data = json.loads(response_text)
             
@@ -466,7 +471,7 @@ class PersonaEngineService:
             # Validate main structure
             if not all(key in persona_data for key in required_keys):
                 missing_keys = [key for key in required_keys if key not in persona_data]
-                logger.error(f"Gemini response missing keys: {missing_keys}")
+                logger.error(f"OpenAI response missing keys: {missing_keys}")
                 # Fallback to basic structure for backward compatibility
                 basic_keys = ["persona_name", "persona_description", "key_traits", "lifestyle_summary", "financial_tendencies"]
                 if all(key in persona_data for key in basic_keys):
@@ -482,7 +487,7 @@ class PersonaEngineService:
                     if "financial_advice_style" not in persona_data:
                         persona_data["financial_advice_style"] = "Prefers practical, actionable advice with clear explanations"
                 else:
-                    logger.error(f"Gemini response missing core required keys: {response_text}")
+                    logger.error(f"OpenAI response missing core required keys: {response_text}")
                     return None
             
             # Validate cultural_profile structure if present
@@ -494,11 +499,11 @@ class PersonaEngineService:
                         if key not in persona_data["cultural_profile"]:
                             persona_data["cultural_profile"][key] = "To be determined based on further data"
             
-            logger.info(f"Gemini API call successful. Generated Persona: {persona_data['persona_name']}")
+            logger.info(f"OpenAI API call successful. Generated Persona: {persona_data['persona_name']}")
             return persona_data
 
         except (json.JSONDecodeError, Exception) as e:
-            logger.error(f"An error occurred calling or parsing Gemini API response: {e}")
+            logger.error(f"An error occurred calling or parsing OpenAI API response: {e}")
             logger.error(f"Failed on response text: {response.text if 'response' in locals() else 'N/A'}")
             return None
 
@@ -610,10 +615,10 @@ class PersonaEngineService:
             
             # Generate persona prompt with preference data
             prompt = self._generate_persona_prompt_with_preferences(cultural_data)
-            persona_data = self._call_gemini_api(prompt)
+            persona_data = await self._call_openai_api(prompt)
             
             if not persona_data:
-                logger.error(f"Could not generate Persona for user {user.id}: Gemini API call failed.")
+                logger.error(f"Could not generate Persona for user {user.id}: OpenAI API call failed.")
                 return None
 
             profile = await self._save_persona_profile(user, persona_data, cultural_data)
@@ -687,10 +692,10 @@ class PersonaEngineService:
             }
 
         prompt = self._generate_persona_prompt(qloo_data)
-        persona_data = self._call_gemini_api(prompt)
+        persona_data = await self._call_openai_api(prompt)
         
         if not persona_data:
-            logger.error(f"Could not generate Persona for user {user.id}: Gemini API call failed.")
+            logger.error(f"Could not generate Persona for user {user.id}: OpenAI API call failed.")
             return None
 
         profile = await self._save_persona_profile(user, persona_data, qloo_data)  # Add await

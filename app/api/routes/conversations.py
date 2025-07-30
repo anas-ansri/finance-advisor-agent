@@ -20,7 +20,7 @@ from app.services.conversation import (
     update_conversation,
 )
 from app.services.message import add_message_to_conversation, get_conversation_messages
-from app.services.ai import generate_ai_response, generate_gemini_streaming_response
+from app.services.ai import generate_ai_response, generate_openai_streaming_response
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -314,7 +314,7 @@ async def read_conversation_messages(
 # Streaming generator for AI response
 async def ai_response_streamer(user_data, persona_data, messages, model_id, temperature, max_tokens, use_persona):
     """
-    Stream AI response using Gemini's streaming API for real-time response.
+    Stream AI response using OpenAI's streaming API for real-time response.
     This function doesn't use database connections to avoid connection leaks.
     """
     print("Starting AI streaming response...")
@@ -382,8 +382,8 @@ INSTRUCTIONS:
         # Compose prompt from messages
         prompt = "\n".join([f"{m.role}: {m.content}" for m in messages])
         
-        # Stream the response using Gemini
-        async for chunk in generate_gemini_streaming_response(prompt):
+        # Stream the response using OpenAI
+        async for chunk in generate_openai_streaming_response(prompt):
             yield chunk
             
     except Exception as e:
@@ -397,7 +397,7 @@ async def chat_with_ai(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Chat with AI and get a response.
+    Chat with AI and get a response with MCP financial context integration.
     If conversation_id is provided, the message will be added to that conversation.
     Otherwise, a new conversation will be created.
     If stream=True, response will be streamed as plain text.
@@ -405,41 +405,144 @@ async def chat_with_ai(
     conversation_id = chat_request.conversation_id
     print(f"Chat request: {chat_request}")
     
-    # Prepare messages for AI - include conversation history if conversation exists
-    ai_messages = chat_request.messages.copy()
-    
-    # Check if conversation exists and belongs to user
-    if conversation_id:
-        conversation = await get_conversation(db, conversation_id=conversation_id)
-        if not conversation:
-            raise HTTPException(status_code=404, detail="Conversation not found")
-        if conversation.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Not enough permissions")
+    # Try MCP-enhanced AI service first
+    try:
+        from app.services.mcp_ai_integration import mcp_ai_service
         
-        # Get existing conversation history and merge with new messages
-        # Only include history if the request doesn't already contain full history
-        if len(chat_request.messages) == 1:  # Only current message sent
-            existing_messages = await get_conversation_messages(db, conversation_id=conversation_id)
-            ai_messages = existing_messages + chat_request.messages
-    else:
-        # Create a new conversation
-        title = chat_request.messages[0].content[:50] + "..." if len(chat_request.messages[0].content) > 50 else chat_request.messages[0].content
-        conversation = await create_conversation(
+        # Prepare messages for AI - include conversation history if conversation exists
+        ai_messages = chat_request.messages.copy()
+        
+        # Check if conversation exists and belongs to user
+        if conversation_id:
+            conversation = await get_conversation(db, conversation_id=conversation_id)
+            if not conversation:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+            if conversation.user_id != current_user.id:
+                raise HTTPException(status_code=403, detail="Not enough permissions")
+            
+            # Get existing conversation history and merge with new messages
+            if len(chat_request.messages) == 1:  # Only current message sent
+                existing_messages = await get_conversation_messages(db, conversation_id=conversation_id)
+                ai_messages = existing_messages + chat_request.messages
+        else:
+            # Create a new conversation
+            title = chat_request.messages[0].content[:50] + "..." if len(chat_request.messages[0].content) > 50 else chat_request.messages[0].content
+            conversation = await create_conversation(
+                db,
+                user_id=current_user.id,
+                conversation_in=ConversationCreate(title=title)
+            )
+            conversation_id = conversation.id
+        
+        # Add user message to conversation
+        user_message = chat_request.messages[-1]
+        logger.info(f"Messages being sent to MCP-enhanced AI (count: {len(ai_messages)}): {[f'{m.role}: {m.content[:50]}...' for m in ai_messages]}")
+        await add_message_to_conversation(
             db,
-            user_id=current_user.id,
-            conversation_in=ConversationCreate(title=title)
+            conversation_id=conversation_id,
+            role=user_message.role,
+            content=user_message.content
         )
-        conversation_id = conversation.id
+        
+        if chat_request.stream:
+            # Use MCP-enhanced streaming
+            collected_response = []
+            
+            async def mcp_stream_and_collect():
+                async for chunk in mcp_ai_service.stream_enhanced_response(
+                    db,
+                    current_user.id,
+                    ai_messages,
+                    chat_request.use_persona,
+                    chat_request.model_id,
+                    chat_request.temperature,
+                    chat_request.max_tokens
+                ):
+                    collected_response.append(chunk)
+                    yield chunk
+                
+                # Save AI response after streaming completes
+                full_response = "".join(collected_response)
+                from app.db.database import async_session_factory
+                async with async_session_factory() as save_db:
+                    await add_message_to_conversation(
+                        save_db,
+                        conversation_id=conversation_id,
+                        role="assistant",
+                        content=full_response
+                    )
+                    await save_db.commit()
+            
+            return StreamingResponse(
+                mcp_stream_and_collect(),
+                media_type="text/plain",
+                headers={"X-Conversation-ID": str(conversation_id)}
+            )
+        else:
+            # Non-streaming MCP-enhanced response
+            ai_response = await mcp_ai_service.generate_enhanced_response(
+                db,
+                current_user.id,
+                ai_messages,
+                chat_request.use_persona,
+                chat_request.model_id,
+                chat_request.temperature,
+                chat_request.max_tokens
+            )
+            
+            # Add AI response to conversation
+            await add_message_to_conversation(
+                db,
+                conversation_id=conversation_id,
+                role="assistant",
+                content=ai_response
+            )
+            
+            return {
+                "conversation_id": conversation_id,
+                "response": ai_response,
+                "enhanced_with_mcp": True
+            }
     
-    # Add user message to conversation
-    user_message = chat_request.messages[-1]
-    logger.info(f"Messages being sent to AI (count: {len(ai_messages)}): {[f'{m.role}: {m.content[:50]}...' for m in ai_messages]}")
-    await add_message_to_conversation(
-        db,
-        conversation_id=conversation_id,
-        role=user_message.role,
-        content=user_message.content
-    )
+    except Exception as mcp_error:
+        logger.warning(f"MCP-enhanced AI failed, falling back to original: {mcp_error}")
+        
+        # Fallback to original implementation
+        # Prepare messages for AI - include conversation history if conversation exists
+        ai_messages = chat_request.messages.copy()
+        
+        # Check if conversation exists and belongs to user
+        if conversation_id:
+            conversation = await get_conversation(db, conversation_id=conversation_id)
+            if not conversation:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+            if conversation.user_id != current_user.id:
+                raise HTTPException(status_code=403, detail="Not enough permissions")
+            
+            # Get existing conversation history and merge with new messages
+            # Only include history if the request doesn't already contain full history
+            if len(chat_request.messages) == 1:  # Only current message sent
+                existing_messages = await get_conversation_messages(db, conversation_id=conversation_id)
+                ai_messages = existing_messages + chat_request.messages
+        else:
+            # Create a new conversation
+            title = chat_request.messages[0].content[:50] + "..." if len(chat_request.messages[0].content) > 50 else chat_request.messages[0].content
+            conversation = await create_conversation(
+                db,
+                user_id=current_user.id,
+                conversation_in=ConversationCreate(title=title)
+            )
+            conversation_id = conversation.id
+        
+        # Add user message to conversation
+        user_message = chat_request.messages[-1]
+        logger.info(f"Messages being sent to AI (count: {len(ai_messages)}): {[f'{m.role}: {m.content[:50]}...' for m in ai_messages]}")
+        await add_message_to_conversation(
+            db,
+            conversation_id=conversation_id,
+            role=user_message.role,
+            content=user_message.content
+        )
     if chat_request.stream:
         # Prepare user and persona data before streaming to avoid database connection issues
         
@@ -447,8 +550,6 @@ async def chat_with_ai(
         user_name = ""
         if current_user.first_name:
             user_name = current_user.first_name
-            if current_user.last_name:
-                user_name += f" {current_user.last_name}"
         elif current_user.email:
             user_name = current_user.email.split('@')[0].replace('.', ' ').replace('_', ' ').title()
         
