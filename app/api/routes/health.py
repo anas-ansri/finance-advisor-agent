@@ -7,26 +7,33 @@ from typing import Optional
 
 from app.db.database import get_db
 from app.core.config import settings
+from app.core.logging_utils import log_function_call, LogPatterns, log_db_operation
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+@log_db_operation("health_check", "system")
 async def check_database_connection(db: AsyncSession) -> tuple[str, dict]:
     """
-    Check database connection with timeout handling.
+    Check database connection with timeout handling and enhanced logging.
     """
     try:
+        logger.info("🔍 Checking database connection")
+        
         # Set a timeout for the database query
         async with asyncio.timeout(10):  # 10 second timeout
             result = await db.execute(text("SELECT 1"))
             row = result.scalar_one()
+            
             if row == 1:
+                logger.info("✅ Database connection successful")
                 return "connected", {
                     "status": "connected",
                     "url": settings.DATABASE_URL.split("@")[1] if "@" in settings.DATABASE_URL else "unknown"
                 }
             else:
+                logger.warning("⚠️ Database query returned unexpected result")
                 return "disconnected", {
                     "status": "disconnected",
                     "error": "Unexpected database response"

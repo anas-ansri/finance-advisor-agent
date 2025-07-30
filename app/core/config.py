@@ -68,7 +68,9 @@ class Settings(BaseSettings):
     ENABLE_RESPONSE_STREAMING: bool = os.getenv("ENABLE_RESPONSE_STREAMING", "true").lower() == "true"
     
     # Logging settings
-    LOG_LEVEL: str = "INFO"
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+    LOG_FORMAT: str = os.getenv("LOG_FORMAT", "auto")  # auto, json, colored, simple
+    LOG_SHOW_FUNCTION_CALLS: bool = os.getenv("LOG_SHOW_FUNCTION_CALLS", "false").lower() == "true"
     
     # AI model settings
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
