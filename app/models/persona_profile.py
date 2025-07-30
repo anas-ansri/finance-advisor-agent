@@ -17,10 +17,6 @@ class PersonaProfile(Base):
     lifestyle_summary = Column(String, nullable=True)
     financial_tendencies = Column(String, nullable=True)
     
-    # New fields for enhanced cultural persona
-    cultural_profile = Column(JSON, nullable=True)  # Store music, film, fashion, dining preferences
-    financial_advice_style = Column(String, nullable=True)  # How they prefer to receive advice
-    
     # Store the raw JSON from Qloo for debugging and potential future use
     source_qloo_data = Column(JSON, nullable=True)
     

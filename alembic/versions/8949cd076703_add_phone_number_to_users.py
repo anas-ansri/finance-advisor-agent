@@ -19,10 +19,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Add phone_number column to users table for MCP integration."""
-    op.add_column('users', sa.Column('phone_number', sa.String(), nullable=True))
+    """Upgrade schema."""
+    pass
 
 
 def downgrade() -> None:
-    """Remove phone_number column from users table."""
-    op.drop_column('users', 'phone_number')
+    """Downgrade schema."""
+    pass
